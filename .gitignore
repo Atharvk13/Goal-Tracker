@@ -1,0 +1,28 @@
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Python environment and caches
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+
+# Runtime data
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+logs/
+backups/
+reports/
