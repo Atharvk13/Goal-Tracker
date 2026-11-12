@@ -9,11 +9,10 @@ OpenCode and VS Code are development tools, not runtime dependencies.
 
 ### Phase 1: Model integration foundation
 
-- Isolated Python environment managed by uv.
-- Validated configuration with Pydantic settings.
+- Validated environment-based configuration.
 - Centralized LangChain model factory.
 - Structured activity extraction with evidence-quote validation.
-- Ollama availability and installed-model checks.
+- Ollama connectivity and installed-model checks.
 - Diagnostic commands with optional live model checks.
 - Offline automated tests.
 
@@ -21,16 +20,26 @@ OpenCode and VS Code are development tools, not runtime dependencies.
 
 - Platform-appropriate application data paths.
 - Configurable data directory and log level.
-- Rotating application logs with UTC timestamps.
-- Request ID support in log records.
-- Explicit startup setup through bootstrap.
-- Interactive terminal menu.
-- Diagnostics available from the menu.
+- Rotating logs with UTC timestamps and request ID support.
+- Explicit application startup through bootstrap.
+- Interactive terminal menu with diagnostics.
 - Graceful exit on Ctrl+C or closed input.
-- Tests for paths, logging, startup and navigation.
 
-Goal management, SQLite persistence, MCP, runtime Skills, progress
-calculations and PDF reports are not implemented yet.
+### Phase 3: Durable storage infrastructure
+
+- SQLite connections with foreign-key enforcement.
+- Explicit transactions with rollback on failure.
+- Initial schema for goals, milestones, entries, history and reports.
+- Numbered migrations tracked in schema_migrations.
+- Checksums that detect changes to applied migrations.
+- Atomic application of pending migrations.
+- Backups before upgrading existing databases.
+- Automatic schema initialization during application startup.
+- An explicit database backup command.
+- Tests for persistence, migrations, backups and failure handling.
+
+Storage infrastructure is available, but goal and progress management
+workflows are not implemented yet.
 
 ## Requirements
 
@@ -65,7 +74,7 @@ Ensure Ollama is running before performing model checks.
 
 ## Start the application
 
-Open the interactive menu with explicit configuration:
+Open the menu with explicit configuration:
 
 ```powershell
 uv run goal-tracker start --env-file .env
@@ -83,11 +92,11 @@ Equivalent Python module entry point:
 uv run python -m goal_tracker start --env-file .env
 ```
 
-The menu currently supports diagnostics and exit.
-Unimplemented features are labelled Planned.
-
+Startup prepares logging and initializes or upgrades the database.
 Opening the menu does not require Ollama.
-Selecting Diagnostics checks Ollama connectivity and model installation.
+
+The menu currently supports diagnostics and exit.
+Goal, progress and report options remain labelled Planned.
 
 ## Configuration
 
@@ -132,7 +141,7 @@ On Windows, the default base directory is normally:
 %LOCALAPPDATA%\GoalTracker
 ```
 
-Planned layout:
+Storage layout:
 
 ```text
 GoalTracker/
@@ -142,14 +151,64 @@ GoalTracker/
 └── reports/
 ```
 
-Startup currently creates the logs directory and opens goal_tracker.log.
-The database, backups and report files are not created yet.
+Startup creates the database and logs.
+The backups directory is created when a backup is needed.
+Report generation is not implemented yet.
 
 Logs use UTC timestamps, independently of the timezone used for goal dates.
 The active log rotates at approximately 1 MB, retaining three backups.
 
 Log operational events only. Do not log journal text, full prompts,
 model responses or secrets.
+
+## Database migrations
+
+Migration files live in:
+
+```text
+src/goal_tracker/db/migrations/
+```
+
+They use consecutive filenames such as:
+
+```text
+001_initial.sql
+002_example_change.sql
+```
+
+Startup applies pending migrations and records their checksums.
+Already-applied versions are not rerun.
+
+Do not edit, rename or remove an applied migration.
+Create a new numbered migration for subsequent schema changes.
+
+All pending migrations run in one transaction.
+If one fails, their schema changes and migration-history inserts roll back.
+
+Migration SQL must not manage transactions itself.
+The runner rejects transaction commands such as COMMIT.
+
+Existing databases are backed up before upgrades.
+New databases and unchanged schemas do not need migration backups.
+
+## Database backups
+
+Create a backup explicitly:
+
+```powershell
+uv run goal-tracker db backup --env-file .env
+```
+
+The command:
+
+- Uses SQLite's backup API.
+- Reads the existing source database without applying migrations.
+- Uses a temporary output file before publishing the completed backup.
+- Generates a unique filename using a UTC timestamp and UUID.
+- Prints the resulting backup location.
+- Reports an error if the source database does not exist.
+
+Automatic restoration is not implemented.
 
 ## Diagnostics
 
@@ -171,8 +230,10 @@ View command help:
 uv run goal-tracker --help
 ```
 
+Doctor does not initialize or migrate the database.
 Live checks do not save progress or modify installed models.
-The first request may take longer while Ollama loads the model.
+
+The first model request may take longer while Ollama loads it.
 
 ## Tests
 
@@ -183,7 +244,11 @@ uv run pytest tests/unit -q
 ```
 
 Tests use temporary storage and simulated model or HTTP responses.
+Database tests use real SQLite files.
 Ollama does not need to be running.
+
+Coverage includes configuration, extraction validation, diagnostics,
+paths, logging, startup, navigation, transactions, migrations and backups.
 
 ## Model switching
 
@@ -202,13 +267,18 @@ Source code lives under src/goal_tracker.
 - config/settings.py: settings loading and validation.
 - config/paths.py: application storage locations.
 - logging_config.py: rotating application logging.
-- bootstrap.py: startup setup and shared application context.
+- bootstrap.py: configuration, logging and database startup.
+- db/connection.py: SQLite connections and explicit transactions.
+- db/backup.py: SQLite backups.
+- db/migrate.py: migration discovery, validation and execution.
+- db/migrations/: versioned schema changes.
 - llm/factory.py: centralized model initialization.
 - llm/schemas.py: structured-output contracts.
 - llm/gateway.py: extraction and evidence validation.
 - llm/capabilities.py: service and model availability checks.
 - cli/app.py: terminal commands and startup integration.
 - cli/menu.py: deterministic numbered navigation.
+- cli/database.py: database maintenance commands.
 - __main__.py: Python module entry point.
 - tests/unit/: automated offline tests.
 
@@ -224,17 +294,30 @@ Ollama manages and runs the downloaded model files.
 - Reporting services must enforce these rules, not just menu labels.
 - No background scheduler is planned for the first version.
 
+## Remaining work
+
+- Goal management and milestone workflows.
+- Reviewed daily progress recording and corrections.
+- Deterministic completion calculations and retrieval.
+- MCP server and client integration.
+- Runtime Agent Skills.
+- Evidence-linked recommendations.
+- Saved reports and PDF exports.
+- Full terminal workflow integration.
+
 ## Current limitations
 
-- Menu options for goals, progress and reports are placeholders.
-- No user progress is persisted.
+- Goal and progress input through the menu is not available yet.
 - Extraction currently covers activities, statuses and evidence quotes.
-- Matching an evidence quote does not prove the interpretation is correct.
-- User review will be required before future database writes.
-- Live diagnostics test one extraction example, not full compatibility.
+- Matching an evidence quote does not prove interpretation is correct.
+- User review will be required before future progress writes.
+- Live diagnostics test one sample, not full model compatibility.
 - Automatic extraction repair retries are not implemented.
 - Service URL and timezone validation still need strengthening.
-- Startup failures produce a concise message; diagnostic detail can improve.
+- Calendar boundaries and reporting eligibility need service-level validation.
+- Historical immutability rules need enforcement in application services.
+- Concurrent migration by multiple application instances is not a supported
+  deployment workflow.
 
 ## Development checkpoints
 
@@ -242,5 +325,5 @@ At each phase boundary:
 
 1. Run automated tests and demonstrate the working features.
 2. Update this README.
-3. Review changes and confirm local settings are excluded.
+3. Review changes and confirm local data is excluded.
 4. Commit the phase and push it to GitHub.

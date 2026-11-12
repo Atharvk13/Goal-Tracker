@@ -14,9 +14,13 @@ from goal_tracker.llm.capabilities import check_model_availability
 from goal_tracker.llm.factory import create_model
 from goal_tracker.llm.gateway import ModelGateway
 
+from goal_tracker.cli.database import database_app
+
 
 app = typer.Typer(no_args_is_help=False)
 console = Console()
+
+app.add_typer(database_app, name="db")
 
 
 @app.callback(invoke_without_command=True)
