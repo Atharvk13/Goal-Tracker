@@ -5,6 +5,9 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from goal_tracker.bootstrap import AppContext
+from goal_tracker.cli.goal_creation import create_goals
+from goal_tracker.cli.goal_management import manage_goals
+from goal_tracker.domain.enums import PeriodKind
 
 
 MENU_OPTIONS = {
@@ -26,7 +29,7 @@ def run_menu(
     diagnostics: Callable[[], None],
     console: Console | None = None,
 ) -> None:
-    """Display terminal navigation without interpreting choices with an LLM."""
+    """Display predictable terminal navigation."""
     if console is None:
         console = Console()
 
@@ -48,7 +51,9 @@ def run_menu(
 
             for number, label in MENU_OPTIONS.items():
                 availability = (
-                    "Ready" if number in {"9", "0"} else "Planned"
+                    "Ready"
+                    if number in {"1", "2", "4", "9", "0"}
+                    else "Planned"
                 )
                 table.add_row(number, label, availability)
 
@@ -64,6 +69,21 @@ def run_menu(
                 context.logger.info("User exited the terminal menu.")
                 console.print("Goodbye.")
                 return
+
+            if choice in {"1", "2"}:
+                kind = (
+                    PeriodKind.WEEKLY
+                    if choice == "1"
+                    else PeriodKind.MONTHLY
+                )
+                context.logger.info("User opened goal creation.")
+                create_goals(context, kind, console)
+                continue
+
+            if choice == "4":
+                context.logger.info("User opened goal management.")
+                manage_goals(context, console)
+                continue
 
             if choice == "9":
                 context.logger.info("User requested diagnostics.")
