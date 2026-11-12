@@ -7,19 +7,61 @@ from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
+from goal_tracker.bootstrap import bootstrap
+from goal_tracker.cli.menu import run_menu
 from goal_tracker.config.settings import load_settings
 from goal_tracker.llm.capabilities import check_model_availability
 from goal_tracker.llm.factory import create_model
 from goal_tracker.llm.gateway import ModelGateway
 
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(no_args_is_help=False)
 console = Console()
 
 
-@app.callback()
-def main():
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
     """Goal Tracker: local goal planning and progress analysis."""
+    if ctx.invoked_subcommand is None:
+        start(env_file=None)
+
+
+@app.command()
+def start(
+    env_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--env-file",
+            help="Explicit path to the application's .env file.",
+            exists=True,
+            dir_okay=False,
+        ),
+    ] = None,
+):
+    """Start the interactive terminal menu."""
+    try:
+        context = bootstrap(
+            str(env_file) if env_file is not None else None
+        )
+    except (ValidationError, OSError, ValueError) as error:
+        console.print(
+            f"Startup failed ({type(error).__name__}). "
+            "Check settings, directory paths and write permissions."
+        )
+        raise typer.Exit(code=1)
+
+    def show_diagnostics():
+        try:
+            doctor(env_file=env_file, llm=False)
+        except typer.Exit as error:
+            if error.exit_code != 0:
+                context.logger.warning("Menu diagnostics reported a failure.")
+
+    run_menu(
+        context=context,
+        diagnostics=show_diagnostics,
+        console=console,
+    )
 
 
 @app.command()

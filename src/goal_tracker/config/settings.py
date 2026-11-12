@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -20,7 +21,13 @@ class Settings(BaseSettings):
     llm_structured_method: Literal[
         "json_schema", "json_mode", "function_calling"
     ] = "json_schema"
+
     timezone: str = "Asia/Kolkata"
+    data_dir: Path | None = None
+    log_level: Literal[
+        "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+    ] = "INFO"
+
 
 def load_settings(env_file: str | None = None) -> Settings:
     """Load settings from an optional .env file and the environment."""
@@ -28,6 +35,7 @@ def load_settings(env_file: str | None = None) -> Settings:
         _env_file=env_file,
         _env_file_encoding="utf-8",
     )
+
 
 if __name__ == "__main__":
     import argparse
