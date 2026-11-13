@@ -314,6 +314,10 @@ The daily-progress workflow checks cover:
 - Atomic rollback on failure.
 - One activity supporting multiple goals without duplicating time.
 
+Recommendation checks cover valid and invented evidence IDs,
+malformed model output, empty evidence and blank references.
+These checks use simulated model responses.
+
 ## Architecture
 
 Source code is under src/goal_tracker.
@@ -349,7 +353,7 @@ Retries reuse request IDs to avoid duplicate writes.
 - Extend AI extraction to learnings, challenges and other item types.
 - MCP server/client integration.
 - Runtime Agent Skills.
-- Evidence-linked recommendations.
+
 
 Comprehensive weekly reports will become available after Sunday ends.
 Monthly reports will become available after the calendar month ends.
