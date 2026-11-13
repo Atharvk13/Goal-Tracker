@@ -63,6 +63,20 @@ Learnings, challenges and other item types currently use manual input.
 
 LLM recommendations are not connected yet.
 
+### Completed-period reports
+
+- Generate weekly reports after Sunday ends.
+- Generate monthly reports after the calendar month ends.
+- Save factual reports as separate revisions.
+- View previous reports without recalculating their figures.
+- Export saved reports as PDF files.
+- Preserve older report snapshots after later progress changes.
+
+Reports include goals, milestone results, activities, learnings,
+challenges, scope changes, logging coverage and recorded time.
+
+AI recommendations are not included yet.
+
 ### Storage and diagnostics
 
 - SQLite transactions and foreign-key enforcement.
@@ -304,6 +318,7 @@ Source code is under src/goal_tracker.
 - bootstrap.py: application startup.
 - logging_config.py: operational logging.
 - analysis: deterministic completion metrics and period summaries.
+- reporting: saved report generation, terminal rendering and PDF export.
 
 Recording flow:
 

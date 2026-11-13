@@ -13,6 +13,11 @@ from goal_tracker.cli.progress import run_progress_menu
 
 from goal_tracker.cli.analysis import show_progress_summary
 
+from goal_tracker.cli.reports import (
+    browse_reports,
+    run_period_reports,
+)
+
 MENU_OPTIONS = {
     "1": "Create Weekly Goals",
     "2": "Create Monthly Goals",
@@ -53,11 +58,7 @@ def run_menu(
             table.add_column("Availability")
 
             for number, label in MENU_OPTIONS.items():
-                availability = (
-                    "Ready"
-                    if number in {"1", "2", "4", "5", "9", "0"}
-                    else "Planned"
-                )
+                availability = "Ready"
                 table.add_row(number, label, availability)
 
             console.print(table)
@@ -96,6 +97,21 @@ def run_menu(
             if choice == "5":
                 context.logger.info("User requested a progress summary.")
                 show_progress_summary(context, console)
+                continue
+
+            if choice in {"6", "7"}:
+                kind = (
+                    PeriodKind.WEEKLY
+                    if choice == "6"
+                    else PeriodKind.MONTHLY
+                )
+                context.logger.info("User opened completed-period reports.")
+                run_period_reports(context, kind, console)
+                continue
+
+            if choice == "8":
+                context.logger.info("User opened report history.")
+                browse_reports(context, console)
                 continue
 
             if choice == "9":

@@ -123,19 +123,35 @@ def test_diagnostics_runs_then_returns_to_menu(
     assert env.output.getvalue().count("Main Menu") == 2
 
 
-def test_planned_feature_does_not_run_other_workflows(
+def test_weekly_report_option_runs_report_workflow(
     monkeypatch,
     menu_environment,
 ):
     env = menu_environment
+    calls = []
+
+    monkeypatch.setattr(
+        menu_module,
+        "run_period_reports",
+        lambda context, kind, console: calls.append(
+            (context, kind, console)
+        ),
+    )
     monkeypatch.setattr("sys.stdin", io.StringIO("6\n0\n"))
 
-    menu_module.run_menu(env.context, env.diagnostics, env.console)
+    menu_module.run_menu(
+        env.context,
+        env.diagnostics,
+        env.console,
+    )
 
-    assert "This feature is planned but not implemented yet." in env.output.getvalue()
-    env.diagnostics.assert_not_called()
-    env.creation.assert_not_called()
-    env.management.assert_not_called()
+    assert calls == [
+        (
+            env.context,
+            menu_module.PeriodKind.WEEKLY,
+            env.console,
+        )
+    ]
 
 
 def test_invalid_choice_prompts_again(monkeypatch, menu_environment):
