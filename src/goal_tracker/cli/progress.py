@@ -7,6 +7,14 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
+from goal_tracker.domain.progress import (
+    ActivityInput,
+    ActivityKind,
+    ActivityState,
+    DailyProgressInput,
+    EntrySource,
+    MilestoneProgress,
+)
 from goal_tracker.bootstrap import AppContext
 from goal_tracker.cli.goal_views import show_goal_list
 from goal_tracker.cli.progress_views import (
@@ -32,7 +40,7 @@ from goal_tracker.domain.progress import (
 )
 from goal_tracker.goals.service import GoalService
 from goal_tracker.progress.service import ProgressService
-
+from goal_tracker.llm.gateway import ModelGateway
 
 PAGE_SIZE = 20
 
@@ -332,6 +340,108 @@ def _save_draft(
         console.print("Progress saved.", style="green")
         show_progress_entry(result["entry"], goals, console)
 
+def _review_ai_activities(
+    context: AppContext,
+    raw_text: str,
+    goals: list[dict],
+    console: Console,
+) -> list[ActivityInput] | None:
+    """Extract activity proposals and review them before saving."""
+    try:
+        with console.status("Interpreting your update with the local model..."):
+            proposal = ModelGateway(
+                context.settings
+            ).extract_progress(raw_text)
+
+    except Exception as error:
+        context.logger.warning(
+            "Progress extraction failed (%s).",
+            type(error).__name__,
+        )
+        console.print(
+            "AI interpretation is unavailable. You can use manual entry.",
+            style="yellow",
+        )
+        return None
+
+    if not proposal.activities:
+        console.print(
+            "No activities with an explicit status were found. "
+            "You can use manual entry.",
+            style="yellow",
+        )
+        return None
+
+    activities = []
+    used_milestones: set[str] = set()
+
+    for number, item in enumerate(proposal.activities, start=1):
+        console.print(f"\nActivity {number}", style="bold")
+        console.print(f"Description: {item.description}", markup=False)
+        console.print(f"Status: {item.status}", markup=False)
+        console.print(
+            f"Supporting quote: {item.evidence_quote}",
+            markup=False,
+        )
+
+        if not Confirm.ask(
+            "Include this activity?",
+            default=True,
+            console=console,
+        ):
+            continue
+
+        while True:
+            description = Prompt.ask(
+                "Description",
+                default=item.description,
+                console=console,
+            ).strip()
+
+            if description:
+                break
+
+            console.print("The description cannot be blank.")
+
+        state = ActivityState(
+            Prompt.ask(
+                "Status",
+                choices=["completed", "pending", "in_progress"],
+                default=item.status,
+                console=console,
+            )
+        )
+
+        selected_goals = _select_goals(goals, console)
+        minutes = _ask_minutes(console)
+
+        milestone_changes = _select_milestone_changes(
+            selected_goals,
+            state,
+            used_milestones,
+            console,
+        )
+
+        used_milestones.update(
+            str(change.milestone_id)
+            for change in milestone_changes
+        )
+
+        activities.append(
+            ActivityInput(
+                kind=ActivityKind.ACTIVITY,
+                description=description,
+                state=state,
+                minutes=minutes,
+                goal_ids=[
+                    goal["id"] for goal in selected_goals
+                ],
+                evidence_quote=item.evidence_quote,
+                milestone_changes=milestone_changes,
+            )
+        )
+
+    return activities
 
 def _record_entry(
     context: AppContext,
@@ -343,25 +453,63 @@ def _record_entry(
     goals = service.list_recordable_goals(activity_date)
     goal_lookup = {goal["id"]: goal for goal in goals}
 
-    activities = []
-    used_milestones = set()
+    method = Prompt.ask(
+        "Recording method",
+        choices=["manual", "ai"],
+        default="manual",
+        console=console,
+    )
 
-    while True:
-        activities.append(
-            _ask_item(goals, used_milestones, console)
+    activities = []
+    source = EntrySource("manual")
+
+    if method == "ai":
+        reviewed = _review_ai_activities(
+            context,
+            raw_text,
+            goals,
+            console,
         )
 
-        if not Confirm.ask(
-            "Add another item to this entry?",
-            default=False,
-            console=console,
-        ):
-            break
+        if reviewed is None:
+            if not Confirm.ask(
+                "Continue with manual entry?",
+                default=True,
+                console=console,
+            ):
+                console.print("Entry cancelled. Nothing was saved.")
+                return
+
+        elif not reviewed:
+            console.print(
+                "No activities were accepted. Nothing was saved."
+            )
+            return
+
+        else:
+            activities = reviewed
+            source = EntrySource("llm_reviewed")
+
+    if not activities:
+        used_milestones: set[str] = set()
+
+        while True:
+            activities.append(
+                _ask_item(goals, used_milestones, console)
+            )
+
+            if not Confirm.ask(
+                "Add another item to this entry?",
+                default=False,
+                console=console,
+            ):
+                break
 
     draft = DailyProgressInput(
         activity_date=activity_date,
         raw_text=raw_text,
         activities=activities,
+        source=source,
     )
 
     _save_draft(service, draft, goal_lookup, console)

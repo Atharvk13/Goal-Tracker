@@ -43,6 +43,15 @@ The current form uses manual structured input.
 Natural-language extraction exists as a prototype but is not yet connected
 to the recording workflow.
 
+Daily recording supports manual input and AI-assisted extraction.
+
+In AI mode, the local model proposes work activities and statuses.
+Users can edit or skip proposals, select goal links and explicitly
+confirm milestone changes before saving.
+
+If extraction fails, manual entry remains available.
+Learnings, challenges and other item types currently use manual input.
+
 ### Progress summaries
 
 - View weekly or monthly progress summaries.
@@ -312,7 +321,7 @@ Retries reuse request IDs to avoid duplicate writes.
 
 ## Remaining functionality
 
-- Natural-language recording connected to review and saving.
+- Extend AI extraction to learnings, challenges and other item types.
 - Completed-period report generation and PDF export.
 - MCP server/client integration.
 - Runtime Agent Skills.
