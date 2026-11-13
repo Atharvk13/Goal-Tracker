@@ -14,6 +14,10 @@ from goal_tracker.reporting.terminal import (
     show_report,
     show_report_list,
 )
+from goal_tracker.analysis.service import AnalysisService
+from goal_tracker.db.repositories.operations import calculate_payload_hash
+from goal_tracker.llm.gateway import ModelGateway
+from goal_tracker.reporting.evidence import build_recommendation_evidence
 
 
 PAGE_SIZE = 20
@@ -113,19 +117,138 @@ def _select_completed_period(
 
 
 def _generate_report(
+    context: AppContext,
     service: ReportService,
     period: PeriodSpec,
     console: Console,
 ) -> dict | None:
-    """Keep the same request ID if a storage retry is needed."""
+    """Prepare optional advice, then save a consistent report."""
+    advisory = None
+    provenance = None
+    evidence_hash = None
+
+    if Confirm.ask(
+        "Include AI suggestions from the local model?",
+        default=False,
+        console=console,
+    ):
+        facts = AnalysisService(
+            context.paths.database,
+            timezone=context.settings.timezone,
+        ).analyze_period(
+            period,
+            as_of=period.end_date,
+        )
+
+        selection = build_recommendation_evidence(facts)
+
+        console.print(
+            f"Selected {len(selection.evidence)} evidence records "
+            "for AI advice."
+        )
+
+        if selection.omitted_count:
+            console.print(
+                f"{selection.omitted_count} records were omitted "
+                "from the model context to limit its size. "
+                "The factual report still includes its full snapshot.",
+                style="yellow",
+            )
+
+        try:
+            with console.status("Preparing local AI suggestions..."):
+                proposed = ModelGateway(
+                    context.settings
+                ).recommend_next_period(selection.evidence)
+
+        except Exception as error:
+            context.logger.warning(
+                "Report recommendations failed (%s).",
+                type(error).__name__,
+            )
+            console.print(
+                "AI suggestions are unavailable.",
+                style="yellow",
+            )
+
+            if not Confirm.ask(
+                "Continue with a factual report only?",
+                default=True,
+                console=console,
+            ):
+                return None
+
+        else:
+            sections = (
+                (
+                    "Areas for improvement",
+                    proposed.areas_for_improvement,
+                ),
+                (
+                    "Next-period suggestions",
+                    proposed.next_period_suggestions,
+                ),
+                (
+                    "Recommended future goals",
+                    proposed.recommended_goals,
+                ),
+            )
+
+            console.print(
+                "\nAI suggestion preview",
+                style="bold",
+            )
+
+            for title, recommendations in sections:
+                console.print()
+                console.print(title, style="bold")
+
+                if not recommendations:
+                    console.print("No suggestions.")
+                    continue
+
+                for recommendation in recommendations:
+                    console.print(
+                        Text(f"- {recommendation.text}")
+                    )
+                    console.print(
+                        Text(
+                            "  Evidence: "
+                            + ", ".join(
+                                recommendation.evidence_ids
+                            )
+                        )
+                    )
+
+            if Confirm.ask(
+                "Include these suggestions in the saved report?",
+                default=False,
+                console=console,
+            ):
+                advisory = proposed
+                evidence_hash = calculate_payload_hash(facts)
+                provenance = {
+                    "provider": context.settings.llm_provider,
+                    "model": context.settings.llm_model,
+                    "temperature": (
+                        context.settings.llm_temperature
+                    ),
+                    "structured_method": (
+                        context.settings.llm_structured_method
+                    ),
+                }
+
     request_id = uuid4()
 
     while True:
         try:
-            with console.status("Generating the factual report..."):
+            with console.status("Saving the report snapshot..."):
                 result = service.generate_report(
                     period,
                     request_id=request_id,
+                    advisory=advisory,
+                    model_provenance=provenance,
+                    expected_evidence_hash=evidence_hash,
                 )
 
             return result["report"]
@@ -228,7 +351,12 @@ def run_period_reports(
         ):
             return
 
-        report = _generate_report(service, period, console)
+        report = _generate_report(
+            context,
+            service,
+            period,
+            console,
+        )
 
         if report is not None:
             console.print("Report saved.", style="green")

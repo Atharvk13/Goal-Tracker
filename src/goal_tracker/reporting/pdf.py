@@ -18,6 +18,7 @@ from reportlab.platypus import (
     Spacer,
     TableStyle,
 )
+import json
 
 
 def _register_fonts() -> None:
@@ -370,8 +371,68 @@ def _build_story(report: dict, width: float) -> list:
             f"{day['entries']} entries"
         )
 
-    heading("Areas for improvement and next-period suggestions")
-    text("AI recommendations are not included in this revision.")
+        heading("AI recommendations")
+    advisory = report["advisory"]
+
+    if advisory is None:
+        text("AI recommendations are not included in this revision.")
+
+    else:
+        provenance = report.get("model_provenance") or {}
+
+        if provenance.get("model"):
+            text(f"Model: {provenance['model']}")
+
+        text(
+            "These are suggestions. Recommended goals have not "
+            "been created automatically."
+        )
+
+        sections = (
+            ("Areas for improvement", "areas_for_improvement"),
+            ("Next-period suggestions", "next_period_suggestions"),
+            ("Recommended future goals", "recommended_goals"),
+        )
+        evidence = advisory["evidence"]
+
+        for title, key in sections:
+            story.append(
+                _paragraph(title, styles["subheading"])
+            )
+
+            recommendations = advisory[key]
+
+            if not recommendations:
+                text("No suggestions.")
+                continue
+
+            for recommendation in recommendations:
+                text(f"- {recommendation['text']}")
+
+                for evidence_id in recommendation["evidence_ids"]:
+                    record = json.loads(evidence[evidence_id])
+
+                    description = (
+                        record.get("description")
+                        or record.get("title")
+                        or (
+                            f"{record.get('kind', 'Reporting')} period: "
+                            f"{record.get('start_date', '')} to "
+                            f"{record.get('end_date', '')}"
+                        )
+                    )
+
+                    text(
+                        f"Source [{evidence_id}]: {description}"
+                    )
+
+        omitted = advisory.get("omitted_count", 0)
+
+        if omitted:
+            text(
+                f"Advice used a limited context: {omitted} records "
+                "were omitted from the model input."
+            )
 
     heading("Report history")
     text(

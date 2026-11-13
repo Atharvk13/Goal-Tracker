@@ -1,6 +1,7 @@
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+import json
 
 
 def _percentage(value: float | None) -> str:
@@ -140,6 +141,73 @@ def _show_goals(console: Console, goals: list[dict]) -> None:
             f"{goal['removed_milestones']} removed."
         )
 
+def _show_advisory(report: dict, console: Console) -> None:
+    """Display saved suggestions and their supporting evidence."""
+    console.print()
+    console.print("AI recommendations", style="bold")
+
+    advisory = report["advisory"]
+
+    if advisory is None:
+        console.print(
+            "AI recommendations are not included in this revision."
+        )
+        return
+
+    provenance = report.get("model_provenance") or {}
+
+    if provenance.get("model"):
+        _line(console, f"Model: {provenance['model']}")
+
+    console.print(
+        "These are suggestions. Recommended goals have not "
+        "been created automatically."
+    )
+
+    sections = (
+        ("Areas for improvement", "areas_for_improvement"),
+        ("Next-period suggestions", "next_period_suggestions"),
+        ("Recommended future goals", "recommended_goals"),
+    )
+    evidence = advisory["evidence"]
+
+    for title, key in sections:
+        console.print()
+        console.print(title, style="bold")
+        recommendations = advisory[key]
+
+        if not recommendations:
+            console.print("No suggestions.")
+            continue
+
+        for item in recommendations:
+            _line(console, f"- {item['text']}")
+
+            for evidence_id in item["evidence_ids"]:
+                record = json.loads(evidence[evidence_id])
+
+                description = (
+                    record.get("description")
+                    or record.get("title")
+                    or (
+                        f"{record.get('kind', 'Reporting')} period: "
+                        f"{record.get('start_date', '')} to "
+                        f"{record.get('end_date', '')}"
+                    )
+                )
+
+                _line(
+                    console,
+                    f"  Source [{evidence_id}]: {description}",
+                )
+
+    omitted = advisory.get("omitted_count", 0)
+
+    if omitted:
+        console.print(
+            f"\nAdvice used a limited context: {omitted} records "
+            "were omitted from the model input."
+        )
 
 def show_report(report: dict, console: Console) -> None:
     """Render the facts stored in a saved report revision."""
@@ -276,13 +344,7 @@ def show_report(report: dict, console: Console) -> None:
 
         console.print(table)
 
-    console.print()
-    console.print("AI recommendations", style="bold")
-
-    if report["advisory"] is None:
-        console.print(
-            "AI recommendations are not included in this revision."
-        )
+        _show_advisory(report, console)
 
     console.print()
     console.print(

@@ -7,6 +7,9 @@ from pathlib import Path
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from goal_tracker.llm.recommendations import ReportRecommendations
+from goal_tracker.reporting.evidence import build_recommendation_evidence
+
 from goal_tracker.analysis.service import AnalysisService
 from goal_tracker.db.connection import open_database, transaction
 from goal_tracker.db.repositories.operations import (
@@ -115,8 +118,11 @@ class ReportService:
         period: PeriodSpec,
         *,
         request_id: str | UUID | None = None,
+        advisory: ReportRecommendations | None = None,
+        model_provenance: dict | None = None,
+        expected_evidence_hash: str | None = None,
     ) -> dict:
-        """Save a factual snapshot as a new report revision."""
+        """Save factual results and optional validated AI advice."""
         normalized_request_id = self._normalize_id(
             request_id if request_id is not None else uuid4()
         )
@@ -134,9 +140,29 @@ class ReportService:
                 "Use the progress summary for an active period."
             )
 
+        recommendations = (
+            ReportRecommendations.model_validate(advisory)
+            if advisory is not None
+            else None
+        )
+
+        if recommendations is not None and not expected_evidence_hash:
+            raise DomainValidationError(
+                "AI advice requires the hash of its source facts."
+            )
+
         operation = "generate_progress_report"
         payload_hash = calculate_payload_hash(
-            period.model_dump(mode="json")
+            {
+                "period": period.model_dump(mode="json"),
+                "advisory": (
+                    recommendations.model_dump(mode="json")
+                    if recommendations is not None
+                    else None
+                ),
+                "model_provenance": model_provenance,
+                "expected_evidence_hash": expected_evidence_hash,
+            }
         )
 
         with self._session(
@@ -168,9 +194,6 @@ class ReportService:
 
                 return previous["response"]
 
-            # The write transaction prevents other writers from changing
-            # records while AnalysisService reads the factual snapshot.
-            # No database writes occur before that read completes.
             analysis = AnalysisService(
                 self.database_path,
                 timezone=self.timezone,
@@ -191,11 +214,54 @@ class ReportService:
                 )
 
             evidence_hash = calculate_payload_hash(facts)
+
+            if (
+                expected_evidence_hash is not None
+                and evidence_hash != expected_evidence_hash
+            ):
+                raise ConflictError(
+                    "Progress records changed while advice was prepared. "
+                    "Generate the report again using refreshed facts.",
+                    request_id=normalized_request_id,
+                )
+
+            saved_advisory = None
+            saved_provenance = None
+
+            if recommendations is not None:
+                selection = build_recommendation_evidence(facts)
+                allowed_ids = set(selection.evidence)
+
+                sections = (
+                    recommendations.areas_for_improvement,
+                    recommendations.next_period_suggestions,
+                    recommendations.recommended_goals,
+                )
+
+                for section in sections:
+                    for item in section:
+                        if not set(
+                            item.evidence_ids
+                        ).issubset(allowed_ids):
+                            raise DomainValidationError(
+                                "Advice references evidence outside "
+                                "the selected report context."
+                            )
+
+                saved_advisory = recommendations.model_dump(
+                    mode="json"
+                )
+                saved_advisory["evidence"] = selection.evidence
+                saved_advisory["omitted_count"] = (
+                    selection.omitted_count
+                )
+                saved_provenance = model_provenance
+
             snapshot_hash = calculate_payload_hash(
                 {
                     "facts": facts,
-                    "advisory": None,
-                    "model_provenance": None,
+                    "advisory": saved_advisory,
+                    "model_provenance": saved_provenance,
                 }
             )
 
@@ -215,8 +281,8 @@ class ReportService:
                 revision=revision,
                 cutoff_date=period.end_date.isoformat(),
                 facts=facts,
-                advisory=None,
-                model_provenance=None,
+                advisory=saved_advisory,
+                model_provenance=saved_provenance,
                 evidence_hash=evidence_hash,
                 snapshot_hash=snapshot_hash,
                 request_id=normalized_request_id,

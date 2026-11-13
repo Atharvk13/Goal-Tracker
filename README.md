@@ -75,7 +75,17 @@ LLM recommendations are not connected yet.
 Reports include goals, milestone results, activities, learnings,
 challenges, scope changes, logging coverage and recorded time.
 
-AI recommendations are not included yet.
+Reports can optionally include AI suggestions for improvement,
+next-period actions and future goals.
+
+Suggestions reference selected report evidence and are previewed
+for approval before saving. Python validates evidence IDs and
+checks that the source facts have not changed.
+
+Accepted advice, supporting evidence and model configuration are
+saved with the report revision and displayed in the terminal and PDF.
+
+AI advice is optional. Factual reports remain available without Ollama.
 
 ### Storage and diagnostics
 
@@ -337,7 +347,6 @@ Retries reuse request IDs to avoid duplicate writes.
 ## Remaining functionality
 
 - Extend AI extraction to learnings, challenges and other item types.
-- Completed-period report generation and PDF export.
 - MCP server/client integration.
 - Runtime Agent Skills.
 - Evidence-linked recommendations.
