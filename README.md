@@ -43,6 +43,17 @@ The current form uses manual structured input.
 Natural-language extraction exists as a prototype but is not yet connected
 to the recording workflow.
 
+### Progress summaries
+
+- View weekly or monthly progress summaries.
+- Calculate original-plan and current-plan completion from milestones.
+- Show goal-wise completion and daily completion trends.
+- Show logging coverage and recorded time.
+- Display completed work, pending items, learnings and challenges.
+- Calculate factual metrics in Python.
+
+LLM recommendations are not connected yet.
+
 ### Storage and diagnostics
 
 - SQLite transactions and foreign-key enforcement.
@@ -62,7 +73,7 @@ to the recording workflow.
 - Ollama for model features
 - qwen3:4b-instruct for the initial model configuration
 
-Manual goal and progress workflows work without Ollama.
+Manual goal, progress and summary workflows work without Ollama.
 
 ## Setup
 
@@ -114,10 +125,18 @@ Available main-menu options:
 - 2: Create Monthly Goals.
 - 3: Record Daily Progress.
 - 4: View / Manage Goals.
+- 5: View Progress Summary.
+- 6: View Completed Week's Report — planned.
+- 7: View Completed Month's Report — planned.
+- 8: View / Export Previous Reports — planned.
 - 9: Diagnostics.
 - 0: Exit.
 
-Progress summaries and report options remain labelled Planned.
+Choose option 5, select weekly or monthly, then enter the period start
+date or press Enter to use the current period.
+
+Quick summaries are available during active periods.
+Comprehensive reports will be available only after their period ends.
 
 ### Recording progress
 
@@ -275,6 +294,7 @@ Source code is under src/goal_tracker.
 - cli: terminal navigation, forms and displays.
 - bootstrap.py: application startup.
 - logging_config.py: operational logging.
+- analysis: deterministic completion metrics and period summaries.
 
 Recording flow:
 
@@ -292,7 +312,6 @@ Retries reuse request IDs to avoid duplicate writes.
 
 ## Remaining functionality
 
-- Deterministic completion percentages and progress summaries.
 - Natural-language recording connected to review and saving.
 - Completed-period report generation and PDF export.
 - MCP server/client integration.
@@ -301,7 +320,7 @@ Retries reuse request IDs to avoid duplicate writes.
 
 Comprehensive weekly reports will become available after Sunday ends.
 Monthly reports will become available after the calendar month ends.
-Quick progress summaries will remain available during active periods.
+Quick progress summaries are available during active periods.
 
 ## Deferred improvements
 

@@ -128,7 +128,7 @@ def test_planned_feature_does_not_run_other_workflows(
     menu_environment,
 ):
     env = menu_environment
-    monkeypatch.setattr("sys.stdin", io.StringIO("5\n0\n"))
+    monkeypatch.setattr("sys.stdin", io.StringIO("6\n0\n"))
 
     menu_module.run_menu(env.context, env.diagnostics, env.console)
 
@@ -180,3 +180,21 @@ def test_keyboard_interrupt_exits_gracefully(
     env.diagnostics.assert_not_called()
     env.creation.assert_not_called()
     env.management.assert_not_called()
+
+def test_progress_summary_option_runs_summary_workflow(
+    monkeypatch,
+    menu_environment,
+):
+    env = menu_environment
+    calls = []
+
+    monkeypatch.setattr(
+        menu_module,
+        "show_progress_summary",
+        lambda context, console: calls.append((context, console)),
+    )
+    monkeypatch.setattr("sys.stdin", io.StringIO("5\n0\n"))
+
+    menu_module.run_menu(env.context, env.diagnostics, env.console)
+
+    assert calls == [(env.context, env.console)]

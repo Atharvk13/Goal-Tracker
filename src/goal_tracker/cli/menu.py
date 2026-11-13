@@ -11,6 +11,8 @@ from goal_tracker.domain.enums import PeriodKind
 
 from goal_tracker.cli.progress import run_progress_menu
 
+from goal_tracker.cli.analysis import show_progress_summary
+
 MENU_OPTIONS = {
     "1": "Create Weekly Goals",
     "2": "Create Monthly Goals",
@@ -53,7 +55,7 @@ def run_menu(
             for number, label in MENU_OPTIONS.items():
                 availability = (
                     "Ready"
-                    if number in {"1", "2", "4", "9", "0"}
+                    if number in {"1", "2", "4", "5", "9", "0"}
                     else "Planned"
                 )
                 table.add_row(number, label, availability)
@@ -89,6 +91,11 @@ def run_menu(
             if choice == "4":
                 context.logger.info("User opened goal management.")
                 manage_goals(context, console)
+                continue
+
+            if choice == "5":
+                context.logger.info("User requested a progress summary.")
+                show_progress_summary(context, console)
                 continue
 
             if choice == "9":
