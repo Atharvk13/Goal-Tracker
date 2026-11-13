@@ -140,6 +140,28 @@ def _generate_report(
             ):
                 return None
 
+def _offer_pdf_export(
+    context: AppContext,
+    service: ReportService,
+    report: dict,
+    console: Console,
+) -> None:
+    """Offer PDF export after displaying a saved report."""
+    if not Confirm.ask(
+        "Export this report as PDF?",
+        default=False,
+        console=console,
+    ):
+        return
+
+    with console.status("Exporting PDF..."):
+        path = service.export_pdf(
+            report["id"],
+            context.paths.reports,
+        )
+
+    console.print("PDF available at:", style="green")
+    console.print(Text(str(path)))
 
 def run_period_reports(
     context: AppContext,
@@ -153,21 +175,21 @@ def run_period_reports(
     )
 
     try:
-        period = _select_completed_period(
+        selected = _select_completed_period(
             service,
             kind,
             console,
         )
 
-        if period is None:
+        if selected is None:
             return
 
-        # Find the stored period ID for this selected period.
-        with service_session_period_lookup(service, period) as period_id:
-            existing = service.list_reports(
-                period_id=period_id,
-                limit=1,
-            )
+        period_id, period = selected
+
+        existing = service.list_reports(
+            period_id=period_id,
+            limit=1,
+        )
 
         if existing:
             latest = existing[0]
@@ -186,11 +208,18 @@ def run_period_reports(
                 return
 
             if action == "view":
-                show_report(
-                    service.get_report(latest["id"]),
-                    console,
+                report = service.get_report(latest["id"])
+                show_report(report, console)
+                _offer_pdf_export(
+                    context, service, report, console
                 )
                 return
+        if report is not None:
+            console.print("Report saved.", style="green")
+            show_report(report, console)
+            _offer_pdf_export(
+                context, service, report, console
+            )
 
         if not Confirm.ask(
             "Generate and save a new report revision?",
@@ -268,6 +297,8 @@ def browse_reports(
 
             report = service.get_report(reports[index]["id"])
             show_report(report, console)
+            _offer_pdf_export(context, service, report, console
+                        )
 
     except AppError as error:
         _show_error(console, error)

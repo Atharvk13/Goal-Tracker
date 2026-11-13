@@ -22,6 +22,7 @@ from goal_tracker.domain.errors import (
     StorageError,
 )
 from goal_tracker.domain.models import PeriodSpec
+from goal_tracker.reporting.pdf import export_report_pdf as render_report_pdf
 
 
 class ReportService:
@@ -276,6 +277,76 @@ class ReportService:
 
             return report
 
+    def export_pdf(
+        self,
+        report_id: str | UUID,
+        output_directory: Path,
+    ) -> Path:
+        """Export a saved snapshot and remember its PDF location."""
+        normalized_id = self._normalize_id(report_id)
+        output_directory = output_directory.expanduser()
+
+        if not output_directory.is_absolute():
+            raise DomainValidationError(
+                "The report output directory must be absolute."
+            )
+
+        output_directory = output_directory.resolve()
+        report = self.get_report(normalized_id)
+
+        # Reuse an existing successful export.
+        if (
+            report["export_status"] == "exported"
+            and report["export_path"]
+        ):
+            existing = Path(report["export_path"]).resolve()
+
+            if (
+                existing.parent == output_directory
+                and existing.is_file()
+            ):
+                return existing
+
+        try:
+            path = render_report_pdf(
+                report,
+                output_directory,
+            )
+
+        except FileExistsError as error:
+            raise ConflictError(
+                "A PDF already exists for this report revision. "
+                "Check the reports directory; it was not overwritten."
+            ) from error
+
+        except Exception as error:
+            self.logger.error(
+                "PDF rendering failed (%s).",
+                type(error).__name__,
+            )
+
+            with self._session(write=True) as connection:
+                ReportRepository(connection).update_export(
+                    normalized_id,
+                    status="failed",
+                    path=None,
+                )
+
+            raise StorageError(
+                "The PDF could not be generated. "
+                "The saved report is still available."
+            ) from error
+
+        with self._session(write=True) as connection:
+            ReportRepository(connection).update_export(
+                normalized_id,
+                status="exported",
+                path=str(path),
+            )
+
+        self.logger.info("Report PDF exported.")
+
+        return path
     def list_reports(
         self,
         *,
