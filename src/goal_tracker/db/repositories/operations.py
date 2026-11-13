@@ -88,6 +88,31 @@ class OperationRepository:
             ),
         )
 
+    def complete_request_response(
+        self,
+        request_id: str,
+        response: dict,
+    ) -> None:
+        """Complete a reserved request within the same transaction."""
+        self._require_transaction()
+
+        if not response:
+            raise ValueError("A completed response cannot be empty.")
+
+        cursor = self.connection.execute(
+            """
+            UPDATE mutation_requests
+            SET response_json = ?
+            WHERE request_id = ? AND response_json = '{}'
+            """,
+            (_canonical_json(response), request_id),
+        )
+
+        if cursor.rowcount != 1:
+            raise ValueError(
+                "The reserved request is missing or already completed."
+            )
+
     def record_audit_event(
         self,
         *,

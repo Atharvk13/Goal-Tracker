@@ -9,6 +9,7 @@ from goal_tracker.cli.goal_creation import create_goals
 from goal_tracker.cli.goal_management import manage_goals
 from goal_tracker.domain.enums import PeriodKind
 
+from goal_tracker.cli.progress import run_progress_menu
 
 MENU_OPTIONS = {
     "1": "Create Weekly Goals",
@@ -78,6 +79,11 @@ def run_menu(
                 )
                 context.logger.info("User opened goal creation.")
                 create_goals(context, kind, console)
+                continue
+
+            if choice == "3":
+                context.logger.info("User opened daily progress.")
+                run_progress_menu(context, console)
                 continue
 
             if choice == "4":

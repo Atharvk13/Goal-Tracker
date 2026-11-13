@@ -1,192 +1,167 @@
 # Goal Tracker
 
-A standalone terminal application for weekly and monthly goal tracking,
-built incrementally with Python, SQLite, LangChain and local Ollama.
+A standalone Python terminal application for weekly/monthly goals
+and daily progress recording.
+
+It uses SQLite for persistent data and Ollama through LangChain
+for local model integration.
 
 OpenCode and VS Code are development tools, not runtime dependencies.
 
-## Development progress
+## Working functionality
 
-### Phase 1: Model integration foundation
+### Goal management
 
-- Environment-based configuration with validation.
-- Centralized LangChain model initialization.
-- Structured activity extraction and evidence-quote checks.
-- Ollama connectivity and installed-model checks.
-- Optional live generation and extraction diagnostics.
+- Create multiple weekly or monthly goals.
+- Define descriptions, expected outcomes, deadlines and milestones.
+- Review and confirm goals before saving.
+- Browse goals with filters and pagination.
+- Edit goals and milestone scope.
+- Cancel or archive goals without deleting history.
+- Preserve goal and milestone revisions.
+- Finalize the initial plan and identify later additions.
+- View revision and audit history.
 
-### Phase 2: Application skeleton
+Weeks run Monday through Sunday.
+Months use calendar boundaries.
 
-- Platform-appropriate application data paths.
-- Configurable data directory and log level.
-- Rotating logs with UTC timestamps and request IDs.
-- Explicit startup setup.
-- Interactive terminal navigation.
+### Daily progress
 
-### Phase 3: Durable storage
+- Record multiple entries on the same date.
+- Record completed, pending and ongoing activities.
+- Include learnings, challenges, observations and achievements.
+- Provide optional time spent in whole minutes.
+- Link one activity to multiple goals.
+- Explicitly mark selected milestones done or not done.
+- Update previously recorded pending work.
+- View saved entries and pending activities.
+- Review possible duplicate entries before allowing another.
+- Preserve original journal text.
+- Retain entries and status history across restarts.
 
-- SQLite connections with foreign-key enforcement.
-- Explicit transactions and rollback.
-- Initial application schema.
-- Numbered migrations with checksums.
-- Automatic database initialization during startup.
+The current form uses manual structured input.
+Natural-language extraction exists as a prototype but is not yet connected
+to the recording workflow.
+
+### Storage and diagnostics
+
+- SQLite transactions and foreign-key enforcement.
+- Versioned migrations with checksum validation.
+- Automatic schema initialization during startup.
 - Backups before database upgrades.
-- Explicit database backup command.
-
-### Phase 4: Goal management
-
-- Weekly and monthly goals with multiple milestones.
-- Current and future calendar-period planning.
-- Review and confirmation before saving.
-- Multiple goals in the same period.
-- Goal browsing with lifecycle filters and pagination.
-- Title, description, outcome and deadline edits.
-- Milestone additions, edits, removal from scope and restoration.
-- Cancellation and archiving without deleting history.
-- Goal and milestone revisions.
-- Request deduplication and conflict detection.
-- Atomic audit records.
-- Initial-plan finalization and identification of later additions.
-- Goal history and paginated audit viewing.
-
-Daily progress recording, completion calculations, MCP integration,
-runtime Skills, recommendations and reports remain to be implemented.
+- Explicit backup command.
+- Request IDs that prevent duplicate saves on retries.
+- Audit records for confirmed changes.
+- Rotating operational logs.
+- Local model availability and generation diagnostics.
 
 ## Requirements
 
 - Python 3.12
 - uv
-- Ollama for AI features
+- Ollama for model features
 - qwen3:4b-instruct for the initial model configuration
 
-Goal creation and management do not require Ollama to be running.
+Manual goal and progress workflows work without Ollama.
 
 ## Setup
 
-Run commands from the project folder.
-
-Install the application and locked dependencies:
+From the project directory, install locked dependencies:
 
 ```powershell
 uv sync --locked
 ```
 
-Create local configuration if .env does not already exist:
+If .env does not already exist, create it:
 
 ```powershell
 Copy-Item -LiteralPath .env.example -Destination .env
 ```
 
-Download the initial model if needed:
+Download the initial model when needed:
 
 ```powershell
 ollama pull qwen3:4b-instruct
 ```
 
-## Start the application
+## Run
 
-Use explicit configuration:
+Start with explicit configuration:
 
 ```powershell
 uv run goal-tracker start --env-file .env
 ```
 
-Or use defaults and environment variables:
-
-```powershell
-uv run goal-tracker
-```
-
-Equivalent Python module entry point:
+Equivalent Python entry point:
 
 ```powershell
 uv run python -m goal_tracker start --env-file .env
 ```
 
-Startup configures logging and initializes or upgrades SQLite.
+Running without arguments uses defaults and environment variables:
 
-## Terminal workflows
+```powershell
+uv run goal-tracker
+```
 
-Available menu options:
+The application does not automatically discover .env files.
+
+## Terminal navigation
+
+Available main-menu options:
 
 - 1: Create Weekly Goals.
 - 2: Create Monthly Goals.
+- 3: Record Daily Progress.
 - 4: View / Manage Goals.
 - 9: Diagnostics.
 - 0: Exit.
 
-Other options are labelled Planned.
+Progress summaries and report options remain labelled Planned.
 
-### Create goals
+### Recording progress
 
-1. Choose a calendar period.
-2. Enter a title, optional description and expected outcome.
-3. Set an optional goal deadline.
-4. Add at least one milestone.
-5. Review the preview and confirm the save.
-6. Optionally add more goals to the same period.
-7. Optionally finalize the initial plan.
+Choose main-menu option 3, then:
 
-Weeks run Monday through Sunday.
-Months run from the first through the last calendar day.
+- 1: Record a new entry.
+- 2: Update pending work.
+- 3: View saved entries.
+- 4: View pending work.
+- 0: Back.
 
-An unspecified milestone deadline uses the goal deadline,
-or the period end if no explicit goal deadline exists.
+Finish journal text with a single period (.) on its own line.
 
-### Original and revised plans
+Select goal numbers separated by commas when an activity supports
+multiple goals. Leave the selection blank for an unlinked item.
 
-Each goal's creation revision and initial milestones remain its baseline.
+Milestones change only when explicitly selected.
+A completed activity does not automatically complete a milestone.
 
-Finalizing a period's initial plan identifies the original set of goals.
-Goals created afterward are labelled additions.
+Review the structured preview and confirm before saving.
 
-New milestones added during editing are outside the goal's creation baseline.
-Removed milestones remain in history.
+When updating pending work, minutes describe the additional work
+reported in the new entry.
 
-Finalization does not prevent later goals or edits.
-Reopening a finalized initial plan is not supported.
+### Goal history
 
-### Manage goals
+Initial goal and milestone revisions remain preserved.
 
-Choose option 4, select a lifecycle filter and choose a goal number.
+Finalizing initial planning separates the original goal set from
+goals added later. Added milestones are outside the creation baseline.
 
-Available actions depend on the goal's status:
+Goal edits require a reason and an expected revision.
+An outdated edit is rejected with a conflict.
 
-- Edit active goals.
-- View details and history.
-- Cancel active goals.
-- Archive active or cancelled goals.
-- Finalize an open initial plan before the period ends.
-
-Use n and p where offered to navigate pages.
-Use f to change the goal-list filter.
-Use 0 to return to the previous screen.
-
-### Editing rules
-
-- Every edit requires a reason and confirmation.
-- The expected revision prevents stale edits from overwriting newer changes.
-- Goal edits append revisions rather than replacing historical descriptions.
-- Included milestones must have unique descriptions.
-- An active goal must retain at least one included milestone.
-- Milestone deadlines cannot exceed the goal deadline.
-- Ended-period corrections require an explicit effective date.
-- Effective dates cannot precede the latest goal revision.
-- Cancelled and archived goals cannot be edited.
-- Cancellation and archiving preserve the goal and its history.
-
-If a storage failure offers a retry, it reuses the same request ID.
-A confirmed request cannot be reused with different input.
+Ended-period goal corrections require an explicit effective date.
+Replacing an earlier daily entry is not implemented yet.
 
 ## Configuration
 
 Priority:
 
 1. Environment variables.
-2. An explicitly selected .env file.
-3. Application defaults.
-
-The application does not automatically discover .env files.
+2. An explicitly supplied .env file.
+3. Defaults.
 
 Initial settings:
 
@@ -205,11 +180,11 @@ Optional settings:
 - GT_LOG_LEVEL: DEBUG, INFO, WARNING, ERROR or CRITICAL.
 - GT_DATA_DIR: an absolute application data-directory override.
 
-Keep local settings in .env and keep .env.example free of secrets.
+.env contains local configuration; .env.example documents shared defaults.
 
-## Application data
+## Data location
 
-The default Windows location is normally:
+The normal Windows location is:
 
 ```text
 %LOCALAPPDATA%\GoalTracker
@@ -225,42 +200,13 @@ GoalTracker/
 └── reports/
 ```
 
-SQLite stores goals, revisions, request responses and audit history.
-View saved goals through menu option 4.
+Goals, entries, activities, state events, request responses and audit
+history are stored in SQLite.
 
-Startup creates the database and logs.
-Backups are created when requested or before schema upgrades.
-Report generation is not implemented yet.
+Operational logs use UTC timestamps.
+Journal text, prompts and model responses should not be logged.
 
-The active log rotates at approximately 1 MB with three backups.
-Logs use UTC timestamps independently of goal-period timezones.
-
-Log operational events only, not journal text, prompts or model responses.
-
-## Database migrations
-
-Migration SQL lives under src/goal_tracker/db/migrations.
-
-Files use consecutive names such as:
-
-```text
-001_initial.sql
-002_example_change.sql
-```
-
-Applied filenames and checksums are recorded in schema_migrations.
-
-Do not edit, rename or remove an applied migration.
-Create a new migration for subsequent schema changes.
-
-Pending migrations and their history records run in one transaction.
-Failure rolls back all pending changes.
-SQL scripts cannot manage the runner's transaction.
-
-Existing databases are backed up before upgrades.
-New databases and unchanged schemas do not need migration backups.
-
-## Backups
+## Backups and migrations
 
 Create a backup:
 
@@ -268,34 +214,33 @@ Create a backup:
 uv run goal-tracker db backup --env-file .env
 ```
 
-The command uses SQLite's backup API and a temporary output file.
-Successful backups receive unique UTC timestamp and UUID filenames.
+Backups use SQLite's backup API and unique filenames.
+The command does not apply migrations.
 
-It does not apply migrations or create a missing source database.
+Migration files are under src/goal_tracker/db/migrations.
+Do not modify an applied migration; create the next numbered file.
+
+Startup applies pending migrations transactionally and backs up
+existing databases before upgrades.
+
 Automatic restoration is not implemented.
 
-## Diagnostics
+## Model diagnostics
 
-Check configuration and model availability:
+Check availability:
 
 ```powershell
 uv run goal-tracker doctor --env-file .env
 ```
 
-Also test text generation and sample extraction:
+Also test generation and sample structured extraction:
 
 ```powershell
 uv run goal-tracker doctor --env-file .env --llm
 ```
 
-View help:
-
-```powershell
-uv run goal-tracker --help
-```
-
-Doctor does not initialize or migrate the database.
-Live checks do not save goals or progress.
+Switch models through GT_LLM_MODEL and rerun compatibility checks.
+Only the Ollama provider is currently implemented.
 
 ## Tests
 
@@ -305,86 +250,68 @@ Run the offline suite:
 uv run pytest tests/unit -q
 ```
 
-Tests cover configuration, models, repositories, services,
-transactions, migrations, backups, navigation and confirmed workflows.
-
-Database tests use real temporary SQLite files.
-Model calls and HTTP responses are simulated where appropriate.
+Tests use temporary SQLite databases and simulated model responses.
 Ollama does not need to be running.
 
-## Model switching
+The daily-progress workflow checks cover:
 
-Change GT_LLM_MODEL to another installed Ollama model and rerun
-doctor with --llm.
-
-Configuration-only switching does not guarantee model compatibility.
-Each replacement model requires structured-output and semantic testing.
-
-Only the Ollama provider is currently supported.
+- Saving and retrieval after restart.
+- Pending work becoming completed.
+- Explicit milestone events.
+- Duplicate review and idempotent retries.
+- Atomic rollback on failure.
+- One activity supporting multiple goals without duplicating time.
 
 ## Architecture
 
-Source code lives under src/goal_tracker.
+Source code is under src/goal_tracker.
 
-- config: validated settings and application paths.
-- domain: shared enums, input models and application errors.
-- db: connections, transactions, migrations and backups.
-- db/repositories: SQLite queries.
-- goals: goal business rules and operation coordination.
-- llm: model factory, extraction schemas, gateway and availability checks.
-- cli: commands, navigation, prompts, previews and goal workflows.
+- config: settings and application paths.
+- domain: validated inputs, enums and shared errors.
+- db: connections, migrations, backups and repositories.
+- goals: goal management and revision rules.
+- progress: daily recording, retrieval and duplicate detection.
+- llm: model initialization, schemas and extraction prototype.
+- cli: terminal navigation, forms and displays.
 - bootstrap.py: application startup.
-- logging_config.py: application logging.
-- __main__.py: Python module entry point.
+- logging_config.py: operational logging.
 
-Typical goal flow:
+Recording flow:
 
 ```text
 Terminal input
-    → Pydantic input validation
+    → Validated progress model
     → Review and confirmation
-    → GoalService
-    → Business rules and repositories
-    → SQLite transaction, request result and audit history
+    → ProgressService
+    → SQLite entry, activity links and state events
+    → Saved response and audit history
 ```
 
-LangChain communicates with Ollama through its local HTTP API.
-Ollama manages and runs downloaded model files.
+All save operations use transactions.
+Retries reuse request IDs to avoid duplicate writes.
 
-## Reporting rules for future implementation
+## Remaining functionality
 
-- Quick progress summaries may be viewed during an active period.
-- Comprehensive weekly reports wait until Sunday has ended.
-- Comprehensive monthly reports wait until the month has ended.
-- Eligibility uses the configured timezone.
-- Reporting services must enforce timing rules.
-- No background scheduler is planned for the first version.
-
-## Remaining work and limitations
-
-- Daily progress recording and corrections.
-- Milestone completion events and deterministic percentages.
-- Database retrieval for natural-language progress interpretation.
-- MCP server and client integration.
+- Deterministic completion percentages and progress summaries.
+- Natural-language recording connected to review and saving.
+- Completed-period report generation and PDF export.
+- MCP server/client integration.
 - Runtime Agent Skills.
 - Evidence-linked recommendations.
-- Saved report snapshots and PDF export.
-- Full terminal integration and packaging verification.
 
-The extraction prototype currently handles activities, statuses and quotes.
-Quote matching does not prove semantic correctness.
-Its output is not yet connected to progress persistence.
+Comprehensive weekly reports will become available after Sunday ends.
+Monthly reports will become available after the calendar month ends.
+Quick progress summaries will remain available during active periods.
 
-Live diagnostics test one sample, not full model compatibility.
-Automatic extraction repair retries are not implemented.
-Configuration-level URL and timezone validation need strengthening.
-Simultaneous migrations from multiple application instances are unsupported.
+## Deferred improvements
+
+- Daily-entry replacement and advanced corrections.
+- Broader model compatibility evaluation.
+- Automatic extraction repair retries.
+- Stronger configuration validation.
+- Additional interface polish and packaging verification.
 
 ## Development checkpoints
 
-At each phase boundary:
-
-1. Run automated tests and demonstrate the working features.
-2. Update this README.
-3. Review changes and confirm local data is excluded.
-4. Commit the phase and push it to GitHub.
+Build a usable workflow, run meaningful checks, update this README,
+then commit and push the checkpoint.

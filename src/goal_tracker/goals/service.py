@@ -263,7 +263,9 @@ class GoalService:
         saved_goal = goals.get_goal(goal_id)
 
         if saved_goal is None:
-            raise StorageError("The saved goal could not be retrieved.")
+            raise StorageError(
+                "The saved goal could not be retrieved."
+            )
 
         return None, saved_goal
 
@@ -340,7 +342,9 @@ class GoalService:
             goal = GoalRepository(connection).get_goal(normalized_id)
 
             if goal is None:
-                raise NotFoundError("The requested goal does not exist.")
+                raise NotFoundError(
+                    "The requested goal does not exist."
+                )
 
             return goal
 
@@ -390,11 +394,14 @@ class GoalService:
             goal = GoalRepository(connection).get_goal(normalized_id)
 
             if goal is None:
-                raise NotFoundError("The requested goal does not exist.")
+                raise NotFoundError(
+                    "The requested goal does not exist."
+                )
 
             history = GoalChangeRepository(connection).get_goal_history(
                 normalized_id
             )
+
             events = OperationRepository(connection).list_audit_events(
                 entity_type="goal",
                 entity_id=normalized_id,
