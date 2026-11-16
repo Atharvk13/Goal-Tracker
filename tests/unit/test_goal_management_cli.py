@@ -50,8 +50,8 @@ def management_environment(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         management_module,
-        "GoalService",
-        lambda database_path, *, timezone: service,
+        "get_goal_service",
+        lambda context: service,
     )
 
     fixed_clock = SimpleNamespace(

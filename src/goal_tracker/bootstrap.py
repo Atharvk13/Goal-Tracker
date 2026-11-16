@@ -7,6 +7,11 @@ from goal_tracker.config.settings import Settings, load_settings
 from goal_tracker.db.migrate import migrate_database
 from goal_tracker.logging_config import configure_logging
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from goal_tracker.mcp.runtime import MCPRuntime
+
 
 @dataclass(frozen=True)
 class AppContext:
@@ -15,6 +20,7 @@ class AppContext:
     settings: Settings
     paths: AppPaths
     logger: logging.Logger
+    mcp: "MCPRuntime | None" = None
 
 
 def bootstrap(env_file: str | None = None) -> AppContext:

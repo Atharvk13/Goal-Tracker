@@ -42,6 +42,11 @@ from goal_tracker.goals.service import GoalService
 from goal_tracker.progress.service import ProgressService
 from goal_tracker.llm.gateway import ModelGateway
 
+from goal_tracker.mcp.services import (
+    get_goal_service,
+    get_progress_service,
+)
+
 PAGE_SIZE = 20
 
 
@@ -716,14 +721,8 @@ def run_progress_menu(
 ) -> None:
     """Record and inspect daily progress without requiring Ollama."""
     try:
-        service = ProgressService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        )
-        goal_service = GoalService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        )
+        service = get_progress_service(context)
+        goal_service = get_goal_service(context)
         goal_lookup = _load_goal_lookup(goal_service)
 
     except AppError as error:

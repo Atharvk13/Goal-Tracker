@@ -2,6 +2,9 @@ from pathlib import Path
 from time import perf_counter
 from typing import Annotated
 
+from dataclasses import replace
+from goal_tracker.mcp.runtime import open_mcp_runtime
+
 import typer
 from pydantic import ValidationError
 from rich.console import Console
@@ -47,26 +50,52 @@ def start(
         context = bootstrap(
             str(env_file) if env_file is not None else None
         )
-    except (ValidationError, OSError, ValueError) as error:
+
+    except (ValidationError, OSError, ValueError) as startup_error:
         console.print(
-            f"Startup failed ({type(error).__name__}). "
+            f"Startup failed ({type(startup_error).__name__}). "
             "Check settings, directory paths and write permissions."
         )
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from startup_error
 
     def show_diagnostics():
         try:
             doctor(env_file=env_file, llm=False)
-        except typer.Exit as error:
-            if error.exit_code != 0:
-                context.logger.warning("Menu diagnostics reported a failure.")
 
-    run_menu(
-        context=context,
-        diagnostics=show_diagnostics,
-        console=console,
-    )
+        except typer.Exit as diagnostics_exit:
+            if diagnostics_exit.exit_code != 0:
+                context.logger.warning(
+                    "Menu diagnostics reported a failure."
+                )
 
+    try:
+        with open_mcp_runtime(
+            context.paths.database,
+            timezone=context.settings.timezone,
+        ) as runtime:
+            context = replace(context, mcp=runtime)
+
+            run_menu(
+                context=context,
+                diagnostics=show_diagnostics,
+                console=console,
+            )
+
+    except KeyboardInterrupt:
+        console.print("\nGoodbye.")
+
+    except Exception as session_error:
+        context.logger.error(
+            "MCP session failed (%s).",
+            type(session_error).__name__,
+        )
+        console.print(
+            f"MCP session failed ({type(session_error).__name__}). "
+            "Run the MCP connection check for diagnostics.",
+            markup=False,
+        )
+        console.print_exception(show_locals=False)
+        raise typer.Exit(code=1) from session_error
 
 @app.command()
 def doctor(

@@ -87,6 +87,17 @@ saved with the report revision and displayed in the terminal and PDF.
 
 AI advice is optional. Factual reports remain available without Ollama.
 
+### MCP integration
+
+- The application starts and stops its own local FastMCP subprocess.
+- Terminal workflows call MCP tools through LangChain's MCPAdapter.
+- One connection remains open while the menu is running.
+- Tools delegate to the existing goal, progress, analysis and report services.
+- Write operations retain user review, validation and request-ID retry safety.
+- The server receives an explicit database path and timezone.
+- Communication uses stdio; no web server or OpenCode runtime is required.
+
+
 ### Storage and diagnostics
 
 - SQLite transactions and foreign-key enforcement.
@@ -299,8 +310,12 @@ Only the Ollama provider is currently implemented.
 Run the offline suite:
 
 ```powershell
-uv run pytest tests/unit -q
+uv run pytest tests/unit tests/integration -q
 ```
+The integration suite launches a real MCP subprocess against a temporary
+database. It checks edits, progress recording, request retries,
+completion calculations, period-end restrictions and persistence.
+Ollama is not required.
 
 Tests use temporary SQLite databases and simulated model responses.
 Ollama does not need to be running.
@@ -348,10 +363,15 @@ Terminal input
 All save operations use transactions.
 Retries reuse request IDs to avoid duplicate writes.
 
+- mcp: tool server, client, connection lifecycle and service adapters.
+
+Normal terminal workflow:
+
+Terminal form and review → MCP adapter → FastMCP tool → service → SQLite/PDF
+
 ## Remaining functionality
 
 - Extend AI extraction to learnings, challenges and other item types.
-- MCP server/client integration.
 - Runtime Agent Skills.
 
 

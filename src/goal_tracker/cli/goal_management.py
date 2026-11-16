@@ -23,6 +23,8 @@ from goal_tracker.domain.errors import AppError
 from goal_tracker.domain.goal_changes import GoalLifecycleChange, PlanFinalize
 from goal_tracker.goals.service import GoalService
 
+from goal_tracker.mcp.services import get_goal_service
+
 
 PAGE_SIZE = 20
 
@@ -228,10 +230,7 @@ def _manage_single_goal(
 def manage_goals(context: AppContext, console: Console) -> None:
     """Browse and manage saved goals without calling the LLM."""
     try:
-        service = GoalService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        )
+            service = get_goal_service(context)
     except AppError as error:
         show_application_error(error, console)
         return

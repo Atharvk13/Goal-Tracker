@@ -3,7 +3,7 @@ name = "goal-tracker"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "langchain>=1.4.9",
+    "langchain[mcp]>=1.4.9",
     "langchain-ollama>=1.1.0",
     "platformdirs>=4.14.5",
     "pydantic>=2.14.3",
@@ -12,6 +12,8 @@ dependencies = [
     "rich>=15.0.0",
     "typer>=0.29.0",
     "tzdata>=2026.6",
+    "fastmcp>=4.1.8",
+    "anyio>=4.16.0",
 ]
 [build-system]
 requires = ["hatchling"]

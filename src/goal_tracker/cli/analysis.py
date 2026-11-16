@@ -9,6 +9,8 @@ from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError, DomainValidationError
 from goal_tracker.domain.models import PeriodSpec
 
+from goal_tracker.mcp.services import get_analysis_service
+
 
 def _today_in_timezone(timezone: str) -> date:
     """Return today's date in the application's configured timezone."""
@@ -163,10 +165,7 @@ def show_progress_summary(context, console: Console) -> None:
         if period is None:
             return
 
-        service = AnalysisService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        )
+        service = get_analysis_service(context)
         summary = service.analyze_period(period)
 
     except (AppError, DomainValidationError, ValueError) as error:

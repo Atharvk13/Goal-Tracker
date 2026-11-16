@@ -6,27 +6,55 @@ import typer
 from typer.testing import CliRunner
 
 import goal_tracker.cli.app as cli_module
+from contextlib import contextmanager
 
+from goal_tracker.bootstrap import AppContext
+from goal_tracker.config.paths import get_app_paths
+from goal_tracker.config.settings import Settings
 
 runner = CliRunner()
 
 
 @pytest.fixture
-def fake_startup(monkeypatch):
-    """Keep startup command tests away from real files and services."""
-    context = SimpleNamespace(
-        settings=SimpleNamespace(llm_model="test-model"),
+def fake_startup(monkeypatch, tmp_path):
+    """Test startup without opening real services or an MCP subprocess."""
+    context = AppContext(
+        settings=Settings(
+            llm_provider="ollama",
+            llm_model="test-model",
+            timezone="Asia/Kolkata",
+        ),
+        paths=get_app_paths(tmp_path / "application-data"),
         logger=Mock(),
     )
 
     bootstrap_mock = Mock(return_value=context)
     doctor_mock = Mock()
+    runtime = Mock()
 
-    monkeypatch.setattr(cli_module, "bootstrap", bootstrap_mock)
-    monkeypatch.setattr(cli_module, "doctor", doctor_mock)
+    @contextmanager
+    def fake_mcp_connection(database_path, *, timezone):
+        assert database_path == context.paths.database
+        assert timezone == context.settings.timezone
+        yield runtime
+
+    monkeypatch.setattr(
+        cli_module,
+        "bootstrap",
+        bootstrap_mock,
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "doctor",
+        doctor_mock,
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "open_mcp_runtime",
+        fake_mcp_connection,
+    )
 
     return context, bootstrap_mock, doctor_mock
-
 
 def test_no_command_opens_menu(fake_startup):
     context, bootstrap_mock, doctor_mock = fake_startup

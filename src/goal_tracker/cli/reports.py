@@ -19,6 +19,11 @@ from goal_tracker.db.repositories.operations import calculate_payload_hash
 from goal_tracker.llm.gateway import ModelGateway
 from goal_tracker.reporting.evidence import build_recommendation_evidence
 
+from goal_tracker.mcp.services import (
+    get_analysis_service,
+    get_report_service,
+)
+
 
 PAGE_SIZE = 20
 
@@ -132,10 +137,7 @@ def _generate_report(
         default=False,
         console=console,
     ):
-        facts = AnalysisService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        ).analyze_period(
+        facts = get_analysis_service(context).analyze_period(
             period,
             as_of=period.end_date,
         )

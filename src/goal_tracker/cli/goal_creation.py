@@ -19,6 +19,7 @@ from goal_tracker.domain.errors import AppError
 from goal_tracker.domain.goal_changes import PlanFinalize
 from goal_tracker.domain.models import GoalCreate, MilestoneInput, PeriodSpec
 from goal_tracker.goals.service import GoalService
+from goal_tracker.mcp.services import get_goal_service
 
 
 def _ask_period(
@@ -180,10 +181,7 @@ def create_goals(
 ) -> None:
     """Collect, review and save goals without using the LLM."""
     try:
-        service = GoalService(
-            context.paths.database,
-            timezone=context.settings.timezone,
-        )
+            service = get_goal_service(context)
     except AppError as error:
         show_application_error(error, console)
         return
