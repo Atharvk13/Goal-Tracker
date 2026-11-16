@@ -21,6 +21,8 @@ OpenCode and VS Code are development tools, not runtime dependencies.
 - Preserve goal and milestone revisions.
 - Finalize the initial plan and identify later additions.
 - View revision and audit history.
+- Request AI milestone proposals with /suggest at the milestone prompt.
+- Accept, edit or skip each proposal before the final goal review.
 
 Weeks run Monday through Sunday.
 Months use calendar boundaries.
@@ -96,6 +98,24 @@ AI advice is optional. Factual reports remain available without Ollama.
 - Write operations retain user review, validation and request-ID retry safety.
 - The server receives an explicit database path and timezone.
 - Communication uses stdio; no web server or OpenCode runtime is required.
+
+### Runtime Agent Skills
+
+The application loads bundled SKILL.md instructions for:
+
+- Goal planning and milestone proposals.
+- Daily progress extraction.
+- Evidence-based progress analysis.
+- Weekly report recommendations.
+- Monthly report recommendations.
+
+Python selects the Skill from the workflow. Weekly and monthly reporting
+also load the shared progress-analysis Skill.
+
+Skills guide model behavior. Python still validates outputs, checks
+evidence references and controls tool execution and confirmation.
+
+Skill files belong to Goal Tracker and are independent of OpenCode.
 
 
 ### Storage and diagnostics
@@ -333,6 +353,9 @@ Recommendation checks cover valid and invented evidence IDs,
 malformed model output, empty evidence and blank references.
 These checks use simulated model responses.
 
+Skill tests cover discovery, invalid names, mismatched metadata,
+and accepting, editing or skipping milestone proposals.
+
 ## Architecture
 
 Source code is under src/goal_tracker.
@@ -348,6 +371,7 @@ Source code is under src/goal_tracker.
 - logging_config.py: operational logging.
 - analysis: deterministic completion metrics and period summaries.
 - reporting: saved report generation, terminal rendering and PDF export.
+- skills: bundled workflow instructions and metadata validation.
 
 Recording flow:
 

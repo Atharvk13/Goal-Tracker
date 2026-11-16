@@ -161,7 +161,10 @@ def _generate_report(
             with console.status("Preparing local AI suggestions..."):
                 proposed = ModelGateway(
                     context.settings
-                ).recommend_next_period(selection.evidence)
+                ).recommend_next_period(
+                    selection.evidence,
+                    period_kind=period.kind.value,
+                )
 
         except Exception as error:
             context.logger.warning(

@@ -64,3 +64,39 @@ class ReportRecommendations(BaseModel):
             "not goals to create automatically."
         ),
     )
+
+class MilestoneSuggestions(BaseModel):
+    """Proposed checklist items that require user review."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    milestones: list[str] = Field(
+        min_length=1,
+        max_length=8,
+        description=(
+            "Distinct, concise milestones with observable "
+            "completion criteria."
+        ),
+    )
+
+    @field_validator("milestones")
+    @classmethod
+    def validate_milestones(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values]
+
+        if any(
+            not value or len(value) > 300
+            for value in cleaned
+        ):
+            raise ValueError(
+                "Milestones must contain 1–300 characters."
+            )
+
+        normalized = [value.casefold() for value in cleaned]
+
+        if len(normalized) != len(set(normalized)):
+            raise ValueError(
+                "Milestone suggestions must be distinct."
+            )
+
+        return cleaned

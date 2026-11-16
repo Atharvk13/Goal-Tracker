@@ -14,12 +14,14 @@ from goal_tracker.cli.prompts import (
     show_application_error,
     show_validation_error,
 )
+from goal_tracker.llm.gateway import ModelGateway
 from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError
 from goal_tracker.domain.goal_changes import PlanFinalize
 from goal_tracker.domain.models import GoalCreate, MilestoneInput, PeriodSpec
 from goal_tracker.goals.service import GoalService
 from goal_tracker.mcp.services import get_goal_service
+from collections.abc import Callable
 
 
 def _ask_period(
@@ -70,15 +72,72 @@ def _ask_milestones(
     period: PeriodSpec,
     deadline: date,
     console: Console,
+    *,
+    suggester: Callable[[], list[str]] | None = None,
 ) -> list[MilestoneInput]:
     milestones = []
     descriptions = set()
+    suggestions = []
 
     while True:
-        description = Prompt.ask(
-            "Milestone description (Enter to finish)",
-            console=console,
-        ).strip()
+        if suggestions:
+            suggested = suggestions.pop(0)
+
+            console.print(
+                f"\nSuggested milestone: {suggested}",
+                markup=False,
+            )
+
+            if not Confirm.ask(
+                "Include this suggestion?",
+                default=True,
+                console=console,
+            ):
+                continue
+
+            description = Prompt.ask(
+                "Milestone description",
+                default=suggested,
+                console=console,
+            ).strip()
+
+        else:
+            label = "Milestone description (Enter to finish)"
+
+            if suggester is not None:
+                label = (
+                    "Milestone description "
+                    "(/suggest for AI, Enter to finish)"
+                )
+
+            description = Prompt.ask(
+                label,
+                console=console,
+            ).strip()
+
+        if description == "/suggest":
+            if suggester is None:
+                console.print(
+                    "AI planning is unavailable in this workflow. "
+                    "Enter a milestone manually.",
+                    style="yellow",
+                )
+                continue
+
+            try:
+                with console.status("Preparing milestone suggestions..."):
+                    suggestions = list(suggester())
+
+            except Exception as error:
+                console.print(
+                    f"AI planning is unavailable "
+                    f"({type(error).__name__}). "
+                    "Continue with manual milestones.",
+                    markup=False,
+                    style="yellow",
+                )
+
+            continue
 
         if not description:
             if milestones:
@@ -128,7 +187,12 @@ def _ask_milestones(
         descriptions.add(normalized)
 
 
-def _ask_goal(period: PeriodSpec, console: Console) -> GoalCreate:
+def _ask_goal(
+    period: PeriodSpec,
+    console: Console,
+    *,
+    context: AppContext | None = None,
+) -> GoalCreate:
     title = ask_required_text("Goal title", console)
     description = Prompt.ask(
         "Description (optional)",
@@ -158,10 +222,28 @@ def _ask_goal(period: PeriodSpec, console: Console) -> GoalCreate:
 
         break
 
+    def suggest() -> list[str]:
+        if context is None:
+            raise ValueError(
+                "Application settings are required for AI planning."
+            )
+
+        proposal = ModelGateway(
+            context.settings
+        ).suggest_milestones(
+            period=period,
+            title=title,
+            description=description,
+            expected_outcome=expected_outcome,
+        )
+
+        return proposal.milestones
+
     milestones = _ask_milestones(
         period,
         target_date or period.end_date,
         console,
+        suggester=suggest if context is not None else None,
     )
 
     return GoalCreate(
@@ -173,13 +255,12 @@ def _ask_goal(period: PeriodSpec, console: Console) -> GoalCreate:
         milestones=milestones,
     )
 
-
 def create_goals(
     context: AppContext,
     kind: PeriodKind,
     console: Console,
 ) -> None:
-    """Collect, review and save goals without using the LLM."""
+    """Collect, review and save goals with optional AI planning."""
     try:
             service = get_goal_service(context)
     except AppError as error:
@@ -195,7 +276,11 @@ def create_goals(
 
     while True:
         try:
-            draft = _ask_goal(period, console)
+                        draft = _ask_goal(
+                period,
+                console,
+                context=context,
+            )
         except ValidationError as error:
             show_validation_error(error, console)
             continue

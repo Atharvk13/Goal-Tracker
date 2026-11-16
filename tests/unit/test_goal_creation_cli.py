@@ -21,6 +21,7 @@ def creation_environment(tmp_path, monkeypatch):
 
     service = GoalService(
         paths.database,
+        timezone="Asia/Kolkata",
         today=lambda: date(2026, 11, 11),
     )
 
@@ -38,9 +39,10 @@ def creation_environment(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         creation_module,
-        "GoalService",
-        lambda database_path, *, timezone: service,
+        "get_goal_service",
+        lambda context: service,
     )
+
     monkeypatch.setattr(
         creation_module,
         "datetime",
@@ -57,7 +59,6 @@ def creation_environment(tmp_path, monkeypatch):
         console=console,
         output=output,
     )
-
 
 def goal_answers(title="Learn LangChain", save="y"):
     """Answers from the goal title through the save confirmation."""
