@@ -351,7 +351,7 @@ def _review_ai_activities(
     goals: list[dict],
     console: Console,
 ) -> list[ActivityInput] | None:
-    """Extract activity proposals and review them before saving."""
+    """Extract and review work activities and other journal items."""
     try:
         with console.status("Interpreting your update with the local model..."):
             proposal = ModelGateway(
@@ -371,7 +371,7 @@ def _review_ai_activities(
 
     if not proposal.activities:
         console.print(
-            "No activities with an explicit status were found. "
+            "No supported journal items were found. "
             "You can use manual entry.",
             style="yellow",
         )
@@ -379,22 +379,48 @@ def _review_ai_activities(
 
     activities = []
     used_milestones: set[str] = set()
+    work_statuses = ["completed", "pending", "in_progress"]
 
     for number, item in enumerate(proposal.activities, start=1):
-        console.print(f"\nActivity {number}", style="bold")
-        console.print(f"Description: {item.description}", markup=False)
-        console.print(f"Status: {item.status}", markup=False)
+        console.print(f"\nItem {number}", style="bold")
+        console.print(
+            f"Description: {item.description}",
+            markup=False,
+        )
+        console.print(f"Category: {item.kind}", markup=False)
+
+        if item.kind == "activity":
+            console.print(
+                f"Status: {item.status}",
+                markup=False,
+            )
+
         console.print(
             f"Supporting quote: {item.evidence_quote}",
             markup=False,
         )
 
         if not Confirm.ask(
-            "Include this activity?",
+            "Include this item?",
             default=True,
             console=console,
         ):
             continue
+
+        kind = ActivityKind(
+            Prompt.ask(
+                "Category",
+                choices=[
+                    "activity",
+                    "learning",
+                    "challenge",
+                    "observation",
+                    "achievement",
+                ],
+                default=item.kind,
+                console=console,
+            )
+        )
 
         while True:
             description = Prompt.ask(
@@ -408,33 +434,46 @@ def _review_ai_activities(
 
             console.print("The description cannot be blank.")
 
-        state = ActivityState(
-            Prompt.ask(
-                "Status",
-                choices=["completed", "pending", "in_progress"],
-                default=item.status,
-                console=console,
-            )
-        )
+        if kind == ActivityKind.ACTIVITY:
+            if item.status in work_statuses:
+                selected_status = Prompt.ask(
+                    "Work status",
+                    choices=work_statuses,
+                    default=item.status,
+                    console=console,
+                )
+            else:
+                selected_status = Prompt.ask(
+                    "Work status",
+                    choices=work_statuses,
+                    console=console,
+                )
+
+            state = ActivityState(selected_status)
+
+        else:
+            state = ActivityState.NOT_APPLICABLE
 
         selected_goals = _select_goals(goals, console)
         minutes = _ask_minutes(console)
+        milestone_changes = []
 
-        milestone_changes = _select_milestone_changes(
-            selected_goals,
-            state,
-            used_milestones,
-            console,
-        )
+        if kind == ActivityKind.ACTIVITY:
+            milestone_changes = _select_milestone_changes(
+                selected_goals,
+                state,
+                used_milestones,
+                console,
+            )
 
-        used_milestones.update(
-            str(change.milestone_id)
-            for change in milestone_changes
-        )
+            used_milestones.update(
+                str(change.milestone_id)
+                for change in milestone_changes
+            )
 
         activities.append(
             ActivityInput(
-                kind=ActivityKind.ACTIVITY,
+                kind=kind,
                 description=description,
                 state=state,
                 minutes=minutes,
@@ -447,7 +486,6 @@ def _review_ai_activities(
         )
 
     return activities
-
 def _record_entry(
     context: AppContext,
     service: ProgressService,

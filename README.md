@@ -47,6 +47,18 @@ to the recording workflow.
 
 Daily recording supports manual input and AI-assisted extraction.
 
+AI extraction can propose work activities, learnings, challenges,
+observations and achievements. Each item includes an exact supporting
+quote from the original journal.
+
+Users can edit or skip proposals, change categories, select goal links
+and explicitly confirm milestone changes before saving.
+
+Only work activities have completion statuses and milestone transitions.
+Other journal categories use not_applicable.
+
+If extraction fails, manual entry remains available.
+
 In AI mode, the local model proposes work activities and statuses.
 Users can edit or skip proposals, select goal links and explicitly
 confirm milestone changes before saving.
@@ -355,6 +367,9 @@ These checks use simulated model responses.
 
 Skill tests cover discovery, invalid names, mismatched metadata,
 and accepting, editing or skipping milestone proposals.
+
+AI journal checks cover supported categories, valid category/status
+combinations and prevention of milestone changes for non-work items.
 
 ## Architecture
 
