@@ -297,12 +297,9 @@ def run_period_reports(
     console: Console,
 ) -> None:
     """View or generate reports for a completed week or month."""
-    service = ReportService(
-        context.paths.database,
-        timezone=context.settings.timezone,
-    )
-
     try:
+        service = get_report_service(context)
+
         selected = _select_completed_period(
             service,
             kind,
@@ -342,12 +339,6 @@ def run_period_reports(
                     context, service, report, console
                 )
                 return
-        if report is not None:
-            console.print("Report saved.", style="green")
-            show_report(report, console)
-            _offer_pdf_export(
-                context, service, report, console
-            )
 
         if not Confirm.ask(
             "Generate and save a new report revision?",
@@ -363,13 +354,17 @@ def run_period_reports(
             console,
         )
 
-        if report is not None:
-            console.print("Report saved.", style="green")
-            show_report(report, console)
+        if report is None:
+            return
+
+        console.print("Report saved.", style="green")
+        show_report(report, console)
+        _offer_pdf_export(
+            context, service, report, console
+        )
 
     except AppError as error:
         _show_error(console, error)
-
 
 def browse_reports(
     context: AppContext,
