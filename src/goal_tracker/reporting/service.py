@@ -90,6 +90,7 @@ class ReportService:
                 "Report storage failed (%s).",
                 type(error).__name__,
                 extra={"request_id": request_id or "-"},
+                exc_info=True,
             )
             raise StorageError(
                 "The report operation could not be completed.",

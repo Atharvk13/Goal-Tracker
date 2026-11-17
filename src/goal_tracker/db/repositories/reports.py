@@ -90,7 +90,7 @@ class ReportRepository:
                 snapshot_hash,
                 request_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 report_id,
