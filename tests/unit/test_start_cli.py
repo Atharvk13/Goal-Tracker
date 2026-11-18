@@ -31,6 +31,7 @@ def fake_startup(monkeypatch, tmp_path):
     bootstrap_mock = Mock(return_value=context)
     doctor_mock = Mock()
     runtime = Mock()
+    runtime.call.return_value = []
 
     @contextmanager
     def fake_mcp_connection(database_path, *, timezone):
@@ -52,6 +53,11 @@ def fake_startup(monkeypatch, tmp_path):
         cli_module,
         "open_mcp_runtime",
         fake_mcp_connection,
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "show_report_reminders",
+        Mock(),
     )
 
     return context, bootstrap_mock, doctor_mock

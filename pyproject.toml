@@ -15,6 +15,10 @@ dependencies = [
     "fastmcp>=4.1.8",
     "anyio>=4.16.0",
     "pyyaml>=6.0.3",
+    "fastapi>=0.163.2",
+    "uvicorn>=0.54.0",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.33",
 ]
 [build-system]
 requires = ["hatchling"]
@@ -25,6 +29,7 @@ packages = ["src/goal_tracker"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.2.0",
 ]
 [project.scripts]

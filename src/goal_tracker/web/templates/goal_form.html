@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Create Goal | Goal Tracker</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            color: #172033;
+            background: #f4f6fa;
+        }
+
+        main {
+            width: min(100% - 40px, 760px);
+            margin: 48px auto;
+        }
+
+        a { color: #2455bd; }
+
+        h1 { margin-bottom: 8px; }
+
+        .intro, .hint {
+            color: #52627a;
+            line-height: 1.6;
+        }
+
+        form {
+            margin-top: 24px;
+            padding: 28px;
+            background: white;
+            border: 1px solid #dce3ed;
+            border-radius: 16px;
+        }
+
+        .field { margin-bottom: 22px; }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #aab6c8;
+            border-radius: 8px;
+            font: inherit;
+            background: white;
+            color: inherit;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .hint {
+            margin: 6px 0 0;
+            font-size: 0.9rem;
+        }
+
+        .errors {
+            padding: 16px;
+            border: 1px solid #d99b9b;
+            border-radius: 8px;
+            background: #fff1f1;
+            color: #872323;
+        }
+
+        .errors ul {
+            margin-bottom: 0;
+            padding-left: 24px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: 0;
+            border-radius: 8px;
+            background: #2455bd;
+            color: white;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        :focus-visible {
+            outline: 3px solid #2455bd;
+            outline-offset: 3px;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <a href="/goals">← Your goals</a>
+        <h1>Create a goal</h1>
+        <p class="intro">
+            Define your outcome and milestones. You will review the
+            complete goal before saving.
+        </p>
+
+        {% if errors %}
+            <section class="errors" role="alert">
+                <strong>Please check the following:</strong>
+                <ul>
+                    {% for error in errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+        <form action="/goals/review" method="post">
+            <div class="field">
+                <label for="kind">Period</label>
+                <select id="kind" name="kind" required>
+                    <option value="weekly"
+                        {% if values.get("kind", "weekly") == "weekly" %}selected{% endif %}>
+                        Weekly
+                    </option>
+                    <option value="monthly"
+                        {% if values.get("kind") == "monthly" %}selected{% endif %}>
+                        Monthly
+                    </option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="start_date">Period start</label>
+                <input
+                    id="start_date"
+                    name="start_date"
+                    type="date"
+                    value="{{ values.get('start_date', '') }}"
+                    aria-describedby="period-hint"
+                    required
+                >
+                <p class="hint" id="period-hint">
+                    Choose Monday for a weekly goal or the first day
+                    of the month for a monthly goal.
+                    Today in your configured timezone is {{ today }}.
+                </p>
+            </div>
+
+            <div class="field">
+                <label for="title">Goal title</label>
+                <input
+                    id="title"
+                    name="title"
+                    type="text"
+                    value="{{ values.get('title', '') }}"
+                    required
+                >
+            </div>
+
+            <div class="field">
+                <label for="description">Description (optional)</label>
+                <textarea id="description" name="description">{{ values.get("description", "") }}</textarea>
+            </div>
+
+            <div class="field">
+                <label for="expected_outcome">Expected outcome (optional)</label>
+                <textarea id="expected_outcome" name="expected_outcome">{{ values.get("expected_outcome", "") }}</textarea>
+            </div>
+
+            <div class="field">
+                <label for="target_date">Goal deadline (optional)</label>
+                <input
+                    id="target_date"
+                    name="target_date"
+                    type="date"
+                    value="{{ values.get('target_date', '') }}"
+                    aria-describedby="deadline-hint"
+                >
+                <p class="hint" id="deadline-hint">
+                    Leave blank to use the period end.
+                </p>
+            </div>
+
+            <div class="field">
+                <label for="milestones">Milestones</label>
+                <textarea
+                    id="milestones"
+                    name="milestones"
+                    rows="6"
+                    aria-describedby="milestones-hint"
+                    required
+                >{{ values.get("milestones", "") }}</textarea>
+                <p class="hint" id="milestones-hint">
+                    Enter one measurable milestone per line.
+                    Include at least one; descriptions must be unique.
+                </p>
+            </div>
+
+            <button type="submit">Review goal →</button>
+        </form>
+    </main>
+</body>
+</html>

@@ -18,7 +18,7 @@ from goal_tracker.llm.factory import create_model
 from goal_tracker.llm.gateway import ModelGateway
 
 from goal_tracker.cli.database import database_app
-
+from goal_tracker.cli.reminders import show_report_reminders
 
 app = typer.Typer(no_args_is_help=False)
 console = Console()
@@ -74,6 +74,8 @@ def start(
             timezone=context.settings.timezone,
         ) as runtime:
             context = replace(context, mcp=runtime)
+
+            show_report_reminders(context, console)
 
             run_menu(
                 context=context,

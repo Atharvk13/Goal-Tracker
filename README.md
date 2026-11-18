@@ -1,7 +1,7 @@
 # Goal Tracker
 
-A standalone Python terminal application for weekly/monthly goals
-and daily progress recording.
+A local Python application for weekly/monthly goals and daily progress
+recording, with a terminal interface and an initial web interface.
 
 It uses SQLite for persistent data and Ollama through LangChain
 for local model integration.
@@ -41,9 +41,6 @@ Months use calendar boundaries.
 - Preserve original journal text.
 - Retain entries and status history across restarts.
 
-The current form uses manual structured input.
-Natural-language extraction exists as a prototype but is not yet connected
-to the recording workflow.
 
 Daily recording supports manual input and AI-assisted extraction.
 
@@ -59,12 +56,6 @@ Other journal categories use not_applicable.
 
 If extraction fails, manual entry remains available.
 
-In AI mode, the local model proposes work activities and statuses.
-Users can edit or skip proposals, select goal links and explicitly
-confirm milestone changes before saving.
-
-If extraction fails, manual entry remains available.
-Learnings, challenges and other item types currently use manual input.
 
 ### Progress summaries
 
@@ -85,6 +76,9 @@ LLM recommendations are not connected yet.
 - View previous reports without recalculating their figures.
 - Export saved reports as PDF files.
 - Preserve older report snapshots after later progress changes.
+- Show startup reminders for completed periods without a saved report.
+- Stop reminding about a period once a report revision exists.
+- Leave report generation under user control.
 
 Reports include goals, milestone results, activities, learnings,
 challenges, scope changes, logging coverage and recorded time.
@@ -193,6 +187,36 @@ uv run goal-tracker
 
 The application does not automatically discover .env files.
 
+## Web interface
+
+Start the local web server with explicit configuration:
+
+```powershell
+uv run python -c "import uvicorn; from goal_tracker.web.app import create_app; uvicorn.run(create_app('.env'), host='127.0.0.1', port=8000)"
+```
+
+Open http://127.0.0.1:8000 in your browser.
+Press Ctrl+C in the terminal to stop the server.
+
+Currently available:
+
+- Dashboard showing the configured model and timezone.
+- Paginated list of saved goals.
+- Weekly and monthly goal creation.
+- Milestones entered one per line.
+- Validation and review before confirmation.
+- Request-ID protection against duplicate saves on repeated submission.
+
+The web interface uses the same configuration, SQLite database and
+goal service as the terminal. Web requests call application services
+directly; terminal workflows continue to use MCP.
+
+Goal editing, daily progress, summaries and reports currently remain
+available through the terminal while their browser screens are developed.
+
+The web server currently supports local, single-user use and binds
+to 127.0.0.1. It does not include authentication.
+
 ## Terminal navigation
 
 Available main-menu options:
@@ -202,9 +226,9 @@ Available main-menu options:
 - 3: Record Daily Progress.
 - 4: View / Manage Goals.
 - 5: View Progress Summary.
-- 6: View Completed Week's Report — planned.
-- 7: View Completed Month's Report — planned.
-- 8: View / Export Previous Reports — planned.
+- 6: View Completed Week's Report.
+- 7: View Completed Month's Report.
+- 8: View / Export Previous Reports.
 - 9: Diagnostics.
 - 0: Exit.
 
@@ -212,8 +236,7 @@ Choose option 5, select weekly or monthly, then enter the period start
 date or press Enter to use the current period.
 
 Quick summaries are available during active periods.
-Comprehensive reports will be available only after their period ends.
-
+Comprehensive reports are available only after their period ends.
 ### Recording progress
 
 Choose main-menu option 3, then:
@@ -371,6 +394,15 @@ and accepting, editing or skipping milestone proposals.
 AI journal checks cover supported categories, valid category/status
 combinations and prevention of milestone changes for non-work items.
 
+Reporting integration checks verify saved snapshots, stale-advice
+rejection, late progress updates and preservation of existing PDFs.
+
+Startup checks verify missing-report reminders and graceful handling
+of reminder lookup failures.
+
+Web checks cover page loading, review without saving, confirmed creation,
+duplicate-submission protection and invalid input rejection.
+
 ## Architecture
 
 Source code is under src/goal_tracker.
@@ -380,7 +412,7 @@ Source code is under src/goal_tracker.
 - db: connections, migrations, backups and repositories.
 - goals: goal management and revision rules.
 - progress: daily recording, retrieval and duplicate detection.
-- llm: model initialization, schemas and extraction prototype.
+- llm: model initialization, validated journal extraction and recommendations.
 - cli: terminal navigation, forms and displays.
 - bootstrap.py: application startup.
 - logging_config.py: operational logging.
@@ -410,12 +442,14 @@ Terminal form and review → MCP adapter → FastMCP tool → service → SQLite
 
 ## Remaining functionality
 
-- Extend AI extraction to learnings, challenges and other item types.
-- Runtime Agent Skills.
+- Browser-based goal editing, lifecycle changes and planning finalization.
+- Browser-based daily recording and review of AI proposals.
+- Browser-based progress summaries.
+- Browser-based report generation, history and PDF downloads.
+- AI milestone proposals and individual milestone dates in the web form.
 
-
-Comprehensive weekly reports will become available after Sunday ends.
-Monthly reports will become available after the calendar month ends.
+Comprehensive weekly reports are available after Sunday ends.
+Monthly reports are available after the calendar month ends.
 Quick progress summaries are available during active periods.
 
 ## Deferred improvements
@@ -425,6 +459,26 @@ Quick progress summaries are available during active periods.
 - Automatic extraction repair retries.
 - Stronger configuration validation.
 - Additional interface polish and packaging verification.
+
+## Packaging
+
+Build an installable wheel and source archive:
+
+```powershell
+uv build
+```
+
+Packages are written to dist/. The wheel includes the SQL migration
+and all five bundled SKILL.md files.
+
+Check the packaged command in an isolated environment:
+
+```powershell
+uv run --isolated --no-project --with .\dist\goal_tracker-0.1.0-py3-none-any.whl goal-tracker --help
+```
+
+Rebuild packages after source changes so they include the latest fixes.
+
 
 ## Development checkpoints
 

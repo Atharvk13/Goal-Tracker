@@ -11,6 +11,8 @@ import goal_tracker.cli.reports as reports_module
 from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.models import PeriodSpec
 
+import goal_tracker.cli.reminders as reminders_module
+from goal_tracker.domain.errors import StorageError
 
 @pytest.fixture
 def report_environment(monkeypatch):
@@ -137,3 +139,65 @@ def test_cancelled_generation_does_not_display_a_report(
     env.generate.assert_called_once()
     env.display.assert_not_called()
     env.export.assert_not_called()
+
+@pytest.mark.parametrize("has_report", [False, True])
+def test_reminder_only_appears_for_missing_reports(
+    monkeypatch,
+    has_report,
+):
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False)
+    context = SimpleNamespace(logger=Mock())
+
+    service = Mock()
+    service.list_completed_periods.return_value = [
+        {
+            "id": "period-1",
+            "kind": "weekly",
+            "start_date": "2026-11-09",
+            "end_date": "2026-11-15",
+        }
+    ]
+    service.list_reports.return_value = (
+        [{"id": "report-1"}] if has_report else []
+    )
+
+    monkeypatch.setattr(
+        reminders_module,
+        "get_report_service",
+        Mock(return_value=service),
+    )
+
+    reminders_module.show_report_reminders(context, console)
+
+    if has_report:
+        assert output.getvalue() == ""
+    else:
+        assert "Completed periods without saved reports" in output.getvalue()
+        assert "2026-11-09" in output.getvalue()
+
+    service.generate_report.assert_not_called()
+
+
+def test_reminder_lookup_failure_does_not_stop_startup(
+    monkeypatch,
+):
+    output = io.StringIO()
+    console = Console(file=output, force_terminal=False)
+    context = SimpleNamespace(logger=Mock())
+
+    service = Mock()
+    service.list_completed_periods.side_effect = StorageError(
+        "Simulated lookup failure."
+    )
+
+    monkeypatch.setattr(
+        reminders_module,
+        "get_report_service",
+        Mock(return_value=service),
+    )
+
+    reminders_module.show_report_reminders(context, console)
+
+    assert "reminders are temporarily unavailable" in output.getvalue()
+    context.logger.warning.assert_called_once()
