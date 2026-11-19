@@ -68,7 +68,7 @@
                 <label for="mail-subject">Subject</label>
                 <button type="button" class="secondary small" data-copy="mail-subject">Copy</button>
             </div>
-            <input id="mail-subject" type="text" value="{{ mail.subject }}" {% if not editable %}readonly{% endif %}>
+            <input id="mail-subject" name="subject" form="send-form" type="text" value="{{ mail.subject }}" {% if not editable %}readonly{% endif %}>
         </div>
     {% endif %}
 
@@ -77,9 +77,98 @@
             <label for="mail-body">Body</label>
             <button type="button" class="secondary small" data-copy="mail-body">Copy</button>
         </div>
-        <textarea id="mail-body" class="mail-body" {% if not editable %}readonly{% endif %}>{{ mail.body }}</textarea>
+        <textarea id="mail-body" name="body" form="send-form" class="mail-body" {% if not editable %}readonly{% endif %}>{{ mail.body }}</textarea>
     </div>
     <p class="hint" role="status" id="copy-status"></p>
+{% endmacro %}
+
+{% macro send_panel(send, day) %}
+    <section class="card send-panel" aria-labelledby="send-heading">
+        <h2 id="send-heading">{% if send.mode == "open" %}Send from Outlook{% else %}Send through Outlook{% endif %}</h2>
+        <form id="send-form" action="/mail/send" method="post">
+            <input type="hidden" name="on" value="{{ day }}">
+            <input type="hidden" name="request_id" value="{{ send.request_id }}">
+
+            {% if send.error %}
+                <p class="warning">{{ send.error }}</p>
+            {% else %}
+                <dl class="recipients">
+                    <dt>To</dt><dd>{{ send.to | join("; ") }}</dd>
+                    {% if send.cc %}<dt>CC</dt><dd>{{ send.cc | join("; ") }}</dd>{% endif %}
+                </dl>
+
+                {% for sent in send.sent_today %}
+                    <p class="warning">
+                        {% if sent["method"] == "outlook_draft" %}
+                            A mail for {{ day }} was already opened in Outlook at {{ sent["completed_at"] | when }}
+                            (“{{ sent["subject"] }}”). Check your Sent Items before sending another.
+                        {% else %}
+                            A mail for {{ day }} was already sent at {{ sent["completed_at"] | when }}
+                            (“{{ sent["subject"] }}”). Sending again creates a second mail.
+                        {% endif %}
+                    </p>
+                {% endfor %}
+
+                <div class="actions">
+                    {% if send.mode == "open" %}
+                        <button
+                            type="button"
+                            data-open-mail
+                            data-to="{{ send.to | join(',') }}"
+                            data-cc="{{ send.cc | join(',') }}"
+                        >Open in Outlook</button>
+                        <span class="hint">
+                            Outlook opens a new message with everything filled in.
+                            Check it there and press Send.
+                        </span>
+                    {% elif send.mode == "draft" %}
+                        <button type="submit" data-busy="Opening Outlook…">Open in Outlook</button>
+                        <span class="hint">Outlook opens the filled message; you press Send.</span>
+                    {% else %}
+                        <button
+                            type="submit"
+                            data-busy="Sending…"
+                            data-confirm="Send this mail to {{ send.to | join('; ') }}{% if send.cc %} (CC {{ send.cc | join('; ') }}){% endif %} now?"
+                        >Send mail now</button>
+                        <span class="hint">Sent from your Outlook account. You will be asked to confirm.</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </form>
+        <p class="hint" id="open-status" role="status"></p>
+        <p class="hint"><a href="/mail/sent">Sent mails</a></p>
+    </section>
+    <script>
+        document.querySelectorAll("[data-confirm]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                if (!window.confirm(button.dataset.confirm)) event.preventDefault();
+            });
+        });
+
+        // Open mode: build a mailto: link from the (possibly edited) fields.
+        document.querySelectorAll("[data-open-mail]").forEach((button) => {
+            button.addEventListener("click", () => {
+                const form = document.getElementById("send-form");
+                const subject = document.getElementById("mail-subject")?.value || "";
+                const body = document.getElementById("mail-body").value;
+                const encode = (text) => encodeURIComponent(text.replace(/\r?\n/g, "\r\n"));
+
+                let url = `mailto:${button.dataset.to}?subject=${encode(subject)}&body=${encode(body)}`;
+                if (button.dataset.cc) url += `&cc=${encodeURIComponent(button.dataset.cc)}`;
+
+                // Record it in "Sent mails"; never block opening Outlook on this.
+                fetch("/mail/opened", { method: "POST", body: new FormData(form), keepalive: true })
+                    .catch(() => {});
+
+                window.location.href = url;
+
+                const status = document.getElementById("open-status");
+                status.textContent = url.length > 1900
+                    ? "Opening Outlook… If the body looks cut off there, use Copy on the body and paste it."
+                    : "Opening Outlook… Press Send there when you are happy with it.";
+            });
+        });
+    </script>
 {% endmacro %}
 
 {% macro advice_sections(sections) %}

@@ -1,6 +1,7 @@
 import logging
 import os
 import sqlite3
+from importlib.resources import files
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +9,10 @@ from pydantic import ValidationError
 import goal_tracker.bootstrap as bootstrap_module
 from goal_tracker.db.connection import open_database, transaction
 
+
+def _bundled_migrations() -> list[str]:
+    folder = files("goal_tracker").joinpath("db", "migrations")
+    return sorted(item.name for item in folder.iterdir() if item.name.endswith(".sql"))
 
 @pytest.fixture(autouse=True)
 def isolate_startup(monkeypatch):
@@ -57,7 +62,7 @@ def test_startup_initializes_database_and_logging(tmp_path):
     with open_database(context.paths.database) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0] == 2
+        ).fetchone()[0] == len(_bundled_migrations())
 
         assert connection.execute(
             "SELECT COUNT(*) FROM goals"
@@ -149,7 +154,7 @@ def test_restarting_preserves_records(tmp_path, monkeypatch):
 
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0] == 2
+        ).fetchone()[0] == len(_bundled_migrations())
 
     assert not second_context.paths.backups.exists()
 

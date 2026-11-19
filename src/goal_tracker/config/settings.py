@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     # mail/daily_template.txt is used when this is not set.
     daily_mail_template: Path | None = None
 
+    # Recipients for the daily mail, separated by ";" or ",".
+    mail_to: str = ""
+    mail_cc: str = ""
+    # "open"  opens a filled message in your default mail app (works with the
+    #         new Outlook); you press Send there.
+    # "send"  sends directly through classic Outlook after you confirm.
+    # "draft" opens the filled message in classic Outlook for you to send.
+    mail_send_mode: Literal["open", "send", "draft"] = "open"
+
 
 def load_settings(env_file: str | None = None) -> Settings:
     """Load settings from an optional .env file and the environment."""

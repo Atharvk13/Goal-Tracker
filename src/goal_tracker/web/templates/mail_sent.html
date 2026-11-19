@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import copy_script, mail_output, send_panel %}
+
+{% block title %}Daily Mail Sent | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <a href="/mail?on={{ day }}">← Daily mail</a>
+
+    {% if status == "sent" %}
+        <h1>Mail sent</h1>
+        <p class="notice" role="status">
+            Sent through Outlook to {{ record["recipients_to"] }}
+            {% if record["recipients_cc"] %}(CC {{ record["recipients_cc"] }}){% endif %}
+            at {{ record["completed_at"] | when }}. You will find it in Outlook’s Sent Items.
+        </p>
+    {% elif status == "drafted" %}
+        <h1>Opened in Outlook</h1>
+        <p class="notice" role="status">
+            The filled message is open in Outlook. Check it and press Send there.
+        </p>
+    {% elif status == "duplicate" %}
+        <h1>Already handled</h1>
+        <p class="warning" role="status">
+            This exact send request was already made
+            ({{ record["status"] | label }}, {{ (record["completed_at"] or record["created_at"]) | when }}),
+            so nothing was sent again.
+        </p>
+    {% else %}
+        <h1>Mail not sent</h1>
+        <p class="error" role="alert">{{ error }}</p>
+        <p class="hint">Your text is kept below. Fix the problem and try again, or copy it.</p>
+    {% endif %}
+
+    {% if status in ("failed", "not_configured", "invalid") %}
+        <section class="card">
+            {{ mail_output({"subject": subject, "body": body}, editable=true) }}
+        </section>
+        {% if status != "not_configured" %}
+            {{ send_panel(send, day) }}
+        {% endif %}
+        {{ copy_script() }}
+    {% endif %}
+
+    <div class="actions">
+        <a class="button secondary" href="/mail/sent">Sent mails</a>
+        <a href="/">Dashboard</a>
+    </div>
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import copy_script, mail_output %}
+{% from "_macros.html" import copy_script, mail_output, send_panel %}
 
 {% block title %}Mail From Saved Progress | Goal Tracker{% endblock %}
 {% block main_class %}medium{% endblock %}
@@ -44,8 +44,10 @@
     {% endif %}
 
     <section class="card">
-        {{ mail_output(mail) }}
+        {{ mail_output(mail, editable=true) }}
     </section>
+
+    {{ send_panel(send, day) }}
 
     <details class="card">
         <summary><strong>Template and placeholders</strong></summary>

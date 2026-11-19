@@ -1,10 +1,15 @@
 import sqlite3
+from importlib.resources import files
 
 import pytest
 
 from goal_tracker.db.connection import open_database, transaction
 from goal_tracker.db.migrate import migrate_database
 
+
+def _bundled_migrations() -> list[str]:
+    folder = files("goal_tracker").joinpath("db", "migrations")
+    return sorted(item.name for item in folder.iterdir() if item.name.endswith(".sql"))
 
 @pytest.fixture
 def migration_project(tmp_path):
@@ -33,7 +38,8 @@ def test_bundled_migration_creates_application_schema(tmp_path):
 
     result = migrate_database(database_path, backup_dir)
 
-    assert result.applied_versions == (1, 2)
+    bundled = _bundled_migrations()
+    assert result.applied_versions == tuple(range(1, len(bundled) + 1))
     assert result.backup_path is None
     assert not backup_dir.exists()
 
@@ -67,9 +73,11 @@ def test_bundled_migration_creates_application_schema(tmp_path):
             "SELECT version, filename FROM schema_migrations ORDER BY version"
         ).fetchall()
 
-        assert [(row["version"], row["filename"]) for row in history] == [
-            (1, "001_initial.sql"),
-            (2, "002_independent_goals.sql"),
+        assert [row["filename"] for row in history] == bundled
+        assert bundled[:3] == [
+            "001_initial.sql",
+            "002_independent_goals.sql",
+            "003_sent_mails.sql",
         ]
 
         goal_columns = {
@@ -279,3 +287,22 @@ def test_incomplete_statement_rolls_back_initial_setup(migration_project):
         assert connection.execute(
             "SELECT name FROM sqlite_master WHERE name = 'schema_migrations'"
         ).fetchone() is None
+
+@pytest.mark.parametrize("to_crlf", [True, False])
+def test_line_ending_changes_are_not_migration_changes(migration_project, to_crlf):
+    # Git on Windows (core.autocrlf) rewrites LF/CRLF after commits/checkouts.
+    database_path, backup_dir, migrations_dir = migration_project
+    path = migrations_dir / "001_initial.sql"
+    original = path.read_bytes().replace(b"\r\n", b"\n")
+    path.write_bytes(original if to_crlf else original.replace(b"\n", b"\r\n"))
+    migrate_database(database_path, backup_dir, migrations_dir)
+
+    converted = original.replace(b"\n", b"\r\n") if to_crlf else original
+    path.write_bytes(converted)
+
+    result = migrate_database(database_path, backup_dir, migrations_dir)
+    assert result.applied_versions == ()
+
+    path.write_bytes(converted + b"\n-- edited\n")
+    with pytest.raises(ValueError, match="has been changed"):
+        migrate_database(database_path, backup_dir, migrations_dir)

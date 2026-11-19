@@ -15,6 +15,21 @@ class Migration:
     filename: str
     checksum: str
     sql: str
+    # Checksums that identify the same file with other line endings. Git on
+    # Windows (core.autocrlf) rewrites LF/CRLF, which must not count as a change.
+    accepted_checksums: frozenset[str] = frozenset()
+
+
+def _sha256(content: bytes) -> str:
+    return hashlib.sha256(content).hexdigest()
+
+
+def _checksums(content: bytes) -> tuple[str, frozenset[str]]:
+    """Return the canonical (LF) checksum and all equivalent checksums."""
+    lf = content.replace(b"\r\n", b"\n")
+    crlf = lf.replace(b"\n", b"\r\n")
+    canonical = _sha256(lf)
+    return canonical, frozenset({canonical, _sha256(crlf), _sha256(content)})
 
 
 @dataclass(frozen=True)
@@ -37,13 +52,15 @@ def _load_migrations(directory: Path) -> list[Migration]:
             raise ValueError(f"Invalid migration filename: {path.name}")
 
         content = path.read_bytes()
+        checksum, accepted = _checksums(content)
 
         migrations.append(
             Migration(
                 version=int(match.group(1)),
                 filename=path.name,
-                checksum=hashlib.sha256(content).hexdigest(),
+                checksum=checksum,
                 sql=content.decode("utf-8-sig"),
+                accepted_checksums=accepted,
             )
         )
 
@@ -168,7 +185,12 @@ def migrate_database(
                     "The database requires a newer application version."
                 )
 
-            if history != (migration.filename, migration.checksum):
+            filename, checksum = history
+
+            if (
+                filename != migration.filename
+                or checksum not in migration.accepted_checksums
+            ):
                 raise ValueError(
                     f"Applied migration {version:03d} has been changed. "
                     "Restore the original file and create a new migration."

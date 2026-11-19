@@ -7,8 +7,11 @@ Two ways to produce it, both using the same template file:
 """
 
 from datetime import date
+from typing import Annotated
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import JSONResponse
 
 from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError
@@ -20,6 +23,9 @@ from goal_tracker.mail.compose import (
     merge_written_sections,
     section_placeholders,
 )
+from goal_tracker.mail import outlook
+from goal_tracker.mail.log import MailLog
+from goal_tracker.mail.outlook import MailSendError, OutgoingMail, parse_addresses
 from goal_tracker.mail.daily import (
     DEFAULT_TEMPLATE_PATH,
     PLACEHOLDERS,
@@ -150,6 +156,38 @@ def _compose_form(
     )
 
 
+def _mail_log(request: Request) -> MailLog:
+    return MailLog(get_context(request).paths.database)
+
+
+def _send_options(request: Request, day: date) -> dict:
+    """What the send controls need: recipients, mode and earlier sends."""
+    settings = get_context(request).settings
+    options = {
+        "to": [],
+        "cc": [],
+        "mode": settings.mail_send_mode,
+        "error": None,
+        "sent_today": _mail_log(request).sent_on(day),
+        "request_id": str(uuid4()),
+    }
+
+    try:
+        options["to"] = parse_addresses(settings.mail_to)
+        options["cc"] = parse_addresses(settings.mail_cc)
+    except ValueError as error:
+        options["error"] = f"{error}. Fix GT_MAIL_TO / GT_MAIL_CC in your .env file."
+        return options
+
+    if not options["to"]:
+        options["error"] = (
+            "No recipient is configured. Add GT_MAIL_TO=name@company.com "
+            "to your .env file and restart the app."
+        )
+
+    return options
+
+
 # ------------------------------------------------------------------ routes
 
 
@@ -212,7 +250,132 @@ async def write_mail(request: Request):
             "journal": answers_as_journal(answers),
             "ai_used": written is not None,
             "warnings": warnings,
+            "send": _send_options(request, day),
         },
+    )
+
+
+@router.post("/mail/send", include_in_schema=False)
+def send_mail(
+    request: Request,
+    on: Annotated[str, Form()],
+    request_id: Annotated[UUID, Form()],
+    subject: Annotated[str, Form()] = "",
+    body: Annotated[str, Form()] = "",
+):
+    """Send the reviewed mail through Outlook exactly once per request ID."""
+    warnings: list[str] = []
+    day = _pick_day(request, on, warnings)
+    options = _send_options(request, day)
+    subject = subject.strip()
+    body = body.replace("\r\n", "\n").strip() + "\n"
+
+    def result(status: str, *, error: str | None = None, record=None, code=200):
+        return templates.TemplateResponse(
+            request=request,
+            name="mail_sent.html",
+            context={
+                "status": status,
+                "error": error,
+                "record": record,
+                "day": day.isoformat(),
+                "subject": subject,
+                "body": body,
+                "send": options,
+            },
+            status_code=code,
+        )
+
+    if options["error"]:
+        return result("not_configured", error=options["error"], code=400)
+
+    if options["mode"] == "open":
+        return result(
+            "invalid",
+            error=(
+                "Direct sending is turned off (GT_MAIL_SEND_MODE=open). "
+                "Use “Open in Outlook” and press Send there."
+            ),
+            code=400,
+        )
+
+    if not subject or not body.strip():
+        return result("invalid", error="The subject and body cannot be empty.", code=422)
+
+    draft_only = options["mode"] == "draft"
+    log = _mail_log(request)
+    record, is_new = log.reserve(
+        request_id=str(request_id),
+        mail_date=day,
+        to=options["to"],
+        cc=options["cc"],
+        subject=subject,
+        body=body,
+        method="outlook_draft" if draft_only else "outlook_send",
+    )
+
+    if not is_new:
+        # A double click, refresh or retry of the same request: never resend.
+        return result("duplicate", record=record)
+
+    try:
+        outlook.send_with_outlook(
+            OutgoingMail(options["to"], options["cc"], subject, body),
+            draft_only=draft_only,
+        )
+    except MailSendError as error:
+        get_context(request).logger.warning("Daily mail sending failed.")
+        record = log.complete(str(request_id), error=str(error))
+        options["request_id"] = str(uuid4())  # a retry is a new send
+        return result("failed", error=str(error), record=record, code=502)
+
+    record = log.complete(str(request_id))
+    return result("drafted" if draft_only else "sent", record=record)
+
+
+@router.post("/mail/opened", include_in_schema=False)
+def mail_opened(
+    request: Request,
+    on: Annotated[str, Form()],
+    request_id: Annotated[UUID, Form()],
+    subject: Annotated[str, Form()] = "",
+    body: Annotated[str, Form()] = "",
+):
+    """Record that the mail was opened in the mail app (open mode).
+
+    The browser opens the mail app itself; the app cannot see whether you
+    pressed Send, so the log shows it as "Opened as draft". Repeated clicks
+    with the same request ID are recorded once.
+    """
+    day = _pick_day(request, on, [])
+    options = _send_options(request, day)
+
+    if options["error"]:
+        return JSONResponse({"logged": False, "error": options["error"]}, 400)
+
+    log = _mail_log(request)
+    record, is_new = log.reserve(
+        request_id=str(request_id),
+        mail_date=day,
+        to=options["to"],
+        cc=options["cc"],
+        subject=subject.strip(),
+        body=body.replace("\r\n", "\n").strip() + "\n",
+        method="outlook_draft",
+    )
+
+    if is_new:
+        record = log.complete(str(request_id))
+
+    return JSONResponse({"logged": True, "new": is_new, "id": record["id"]})
+
+
+@router.get("/mail/sent", include_in_schema=False)
+def sent_mails(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="mail_log.html",
+        context={"mails": _mail_log(request).recent(limit=50)},
     )
 
 
@@ -238,5 +401,6 @@ def daily_mail(request: Request, on: str | None = None):
             "placeholders": PLACEHOLDERS,
             "template_path": str(template_path),
             "is_default_template": template_path == DEFAULT_TEMPLATE_PATH,
+            "send": _send_options(request, day),
         },
     )
