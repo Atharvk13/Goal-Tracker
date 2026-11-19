@@ -38,6 +38,22 @@ class GoalRepository:
 
         return dict(row) if row is not None else None
 
+    def find_independent_goal(self, period_id: str) -> dict | None:
+        """Return the shared independent-tasks goal of a period, if any."""
+        row = self.connection.execute(
+            """
+            SELECT id
+            FROM goals
+            WHERE period_id = ?
+              AND is_independent = 1
+            ORDER BY created_at, id
+            LIMIT 1
+            """,
+            (period_id,),
+        ).fetchone()
+
+        return self.get_goal(row["id"]) if row is not None else None
+
     def insert_period(self, period_id: str, period: PeriodSpec) -> None:
         self._require_transaction()
 
@@ -65,6 +81,7 @@ class GoalRepository:
         effective_date: date,
         *,
         is_original_plan: bool,
+        is_independent: bool = False,
     ) -> None:
         self._require_transaction()
 
@@ -81,15 +98,17 @@ class GoalRepository:
                 period_id,
                 predecessor_goal_id,
                 current_revision,
-                is_original_plan
+                is_original_plan,
+                is_independent
             )
-            VALUES (?, ?, ?, 1, ?)
+            VALUES (?, ?, ?, 1, ?, ?)
             """,
             (
                 goal_id,
                 period_id,
                 predecessor_id,
                 int(is_original_plan),
+                int(is_independent),
             ),
         )
 
@@ -171,6 +190,7 @@ class GoalRepository:
                 g.period_id,
                 g.predecessor_goal_id,
                 g.is_original_plan,
+                g.is_independent,
                 g.created_at,
                 r.revision,
                 r.title,
@@ -200,6 +220,7 @@ class GoalRepository:
 
         goal = dict(row)
         goal["is_original_plan"] = bool(goal["is_original_plan"])
+        goal["is_independent"] = bool(goal["is_independent"])
 
         goal["period"] = {
             "id": goal.pop("period_id"),

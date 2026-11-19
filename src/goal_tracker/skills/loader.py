@@ -11,6 +11,7 @@ SKILL_NAMES = (
     "progress-analysis",
     "weekly-report-generation",
     "monthly-report-generation",
+    "daily-mail-writing",
 )
 
 _NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_macros.html" import errors_box %}
+
+{% block title %}Daily Mail | Goal Tracker{% endblock %}
+
+{% block content %}
+    <h1>Daily mail</h1>
+    <p class="intro">
+        Tell me what you did. Short notes are fine — the local model turns them
+        into your daily update mail. Leave a question empty if it does not apply.
+    </p>
+
+    {% for warning in warnings %}
+        <p class="warning" role="status">{{ warning }}</p>
+    {% endfor %}
+
+    {{ errors_box(errors) }}
+
+    <form class="panel" action="/mail" method="post">
+        <div class="field">
+            <label for="on">Day</label>
+            <input id="on" name="on" type="date" max="{{ today }}" value="{{ day }}" style="width: auto">
+        </div>
+
+        {% for section in sections %}
+            <div class="field">
+                <label for="{{ section.field }}">{{ loop.index }}. {{ section.heading }}</label>
+                <p class="hint" style="margin: -4px 0 8px">{{ section.question }}</p>
+                <textarea
+                    id="{{ section.field }}"
+                    name="{{ section.field }}"
+                    rows="3"
+                    placeholder="e.g. {{ section.example }}"
+                >{{ answers.get(section.field, "") }}</textarea>
+            </div>
+        {% endfor %}
+
+        <p class="hint">
+            One point per line, or separate points with semicolons. Only what you
+            write here is used.
+        </p>
+
+        <div class="actions">
+            <button type="submit" data-busy="Writing your mail…">Write my mail →</button>
+            <a href="/progress/mail?on={{ day }}">Fill from saved progress instead</a>
+        </div>
+    </form>
+{% endblock %}

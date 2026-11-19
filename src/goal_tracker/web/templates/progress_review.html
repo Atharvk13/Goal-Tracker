@@ -40,11 +40,12 @@
         </dl>
 
         <h2 class="section-title">Items</h2>
-        {{ entry_items(draft["activities"], goal_titles, milestone_names) }}
+        {{ entry_items(draft["activities"], goal_titles, milestone_names, independent_ids) }}
 
         <div class="actions">
             <form action="/progress/save" method="post">
                 <input type="hidden" name="draft_json" value="{{ draft_json }}">
+                <input type="hidden" name="independent_ids" value="{{ independent_field }}">
                 {% if duplicates %}
                     <input type="hidden" name="allow_duplicate_entry" value="1">
                     <button type="submit">Save as a separate entry</button>
@@ -54,6 +55,7 @@
             </form>
             <form action="/progress/edit" method="post">
                 <input type="hidden" name="draft_json" value="{{ draft_json }}">
+                <input type="hidden" name="independent_ids" value="{{ independent_field }}">
                 <button type="submit" class="secondary">Edit items</button>
             </form>
             <a href="/progress">Cancel</a>

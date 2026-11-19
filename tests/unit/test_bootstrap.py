@@ -57,7 +57,7 @@ def test_startup_initializes_database_and_logging(tmp_path):
     with open_database(context.paths.database) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 2
 
         assert connection.execute(
             "SELECT COUNT(*) FROM goals"
@@ -149,7 +149,7 @@ def test_restarting_preserves_records(tmp_path, monkeypatch):
 
         assert connection.execute(
             "SELECT COUNT(*) FROM schema_migrations"
-        ).fetchone()[0] == 1
+        ).fetchone()[0] == 2
 
     assert not second_context.paths.backups.exists()
 

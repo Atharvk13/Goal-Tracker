@@ -47,6 +47,7 @@ class FakeGateway:
         self.suggestions = None
         self.proposal = None
         self.recommendations = None
+        self.mail_draft = None
         self.error: Exception | None = None
         self.calls: list[str] = []
 
@@ -64,6 +65,10 @@ class FakeGateway:
 
     def recommend_next_period(self, _evidence, *, period_kind=None):
         return self._result("recommend_next_period", self.recommendations)
+
+    def write_daily_mail(self, answers):
+        self.mail_answers = answers
+        return self._result("write_daily_mail", self.mail_draft)
 
 
 @pytest.fixture

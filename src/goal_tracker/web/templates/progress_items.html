@@ -99,6 +99,26 @@
                     </p>
                 {% endif %}
 
+                {% if not item.updates %}
+                    <fieldset class="checks related">
+                        <legend>Is this task related to any of the listed goals?</legend>
+                        <label>
+                            <input type="radio" name="{{ p }}related" value="goal" {% if item.related != "independent" %}checked{% endif %}>
+                            <span>Yes — link it to the goals I tick below</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="{{ p }}related" value="independent" {% if item.related == "independent" %}checked{% endif %}>
+                            <span>No — it is an independent task</span>
+                        </label>
+                        <p class="hint">
+                            Work with no goal selected is saved under this week’s
+                            “Independent tasks” goal, which never affects completion.
+                            Learnings and other notes simply stay unlinked.
+                        </p>
+                    </fieldset>
+                {% endif %}
+
+                <div class="goal-section" data-related="{{ p }}related">
                 {% if goals %}
                     <div class="checks goal-links">
                         <p class="label-text">
@@ -136,8 +156,12 @@
                         </p>
                     </div>
                 {% else %}
-                    <p class="hint">No goals accept progress on this date, so this item will be unlinked.</p>
+                    <p class="hint">
+                        No goals accept progress on this date, so work is saved as an
+                        independent task.
+                    </p>
                 {% endif %}
+                </div>
             </fieldset>
         {% endfor %}
 
@@ -151,4 +175,17 @@
             <a href="/progress">Cancel</a>
         </div>
     </form>
+
+    <script>
+        // Hide the goal list for independent tasks (the form still works without this).
+        document.querySelectorAll(".goal-section[data-related]").forEach((section) => {
+            const radios = document.querySelectorAll(`input[name="${section.dataset.related}"]`);
+            const update = () => {
+                const independent = [...radios].some((r) => r.checked && r.value === "independent");
+                section.hidden = independent;
+            };
+            radios.forEach((radio) => radio.addEventListener("change", update));
+            update();
+        });
+    </script>
 {% endblock %}

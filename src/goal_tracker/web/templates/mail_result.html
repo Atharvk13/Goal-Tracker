@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import copy_script, mail_output %}
+
+{% block title %}Your Daily Mail | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <header class="page-header">
+        <div>
+            <h1>Your daily mail</h1>
+            <p class="intro">
+                {% if ai_used %}Written by the local model from your answers.{% else %}Built from your answers.{% endif %}
+                Check it, edit anything below, then copy it into your mail app.
+            </p>
+        </div>
+        <button type="button" data-copy="mail-all">Copy subject and body</button>
+    </header>
+
+    {% for warning in warnings %}
+        <p class="warning" role="status">{{ warning }}</p>
+    {% endfor %}
+
+    <section class="card">
+        {{ mail_output(mail, editable=true) }}
+    </section>
+
+    <div class="actions">
+        <form action="/mail" method="post">
+            <input type="hidden" name="on" value="{{ day }}">
+            {% for field, value in answers.items() %}
+                <input type="hidden" name="{{ field }}" value="{{ value }}">
+            {% endfor %}
+            <button type="submit" name="action" value="edit" class="secondary">Edit my answers</button>
+            <button type="submit" name="action" value="write" class="secondary" data-busy="Rewriting…">Write again</button>
+        </form>
+    </div>
+
+    <section class="card">
+        <h2>Also save as progress?</h2>
+        <p class="hint">
+            Your answers become the journal for {{ day }}. The local model proposes
+            items; you choose for each whether it belongs to one of your goals or is
+            an independent task, and nothing is saved until you confirm.
+        </p>
+        <form action="/progress/start" method="post">
+            <input type="hidden" name="activity_date" value="{{ day }}">
+            <input type="hidden" name="raw_text" value="{{ journal }}">
+            <input type="hidden" name="method" value="ai">
+            <button type="submit" data-busy="Preparing items…">Review and save as progress →</button>
+        </form>
+    </section>
+
+    {{ copy_script() }}
+{% endblock %}

@@ -62,6 +62,36 @@ class ActivityProposal(BaseModel):
         return self
 
 
+_Bullets = list[str]
+
+
+class DailyMailDraft(BaseModel):
+    """Bullet points for each section of the daily status mail."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meetings_activities: _Bullets = Field(
+        max_length=12,
+        description="Meetings, discussions and team activities, one per bullet.",
+    )
+    use_cases_completed: _Bullets = Field(
+        max_length=12,
+        description="Use cases, features or tasks worked on or completed.",
+    )
+    learning: _Bullets = Field(
+        max_length=12,
+        description="Technologies, concepts or skills learned or explored.",
+    )
+    plan_for_tomorrow: _Bullets = Field(
+        max_length=12,
+        description="Planned tasks and next steps for tomorrow.",
+    )
+    blockers: _Bullets = Field(
+        max_length=12,
+        description="Blockers or support required.",
+    )
+
+
 class ProgressProposal(BaseModel):
     """Proposed journal items for user review before saving."""
 

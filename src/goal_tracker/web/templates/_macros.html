@@ -25,6 +25,63 @@
     {% endif %}
 {% endmacro %}
 
+{% macro copy_script() %}
+    <script>
+        // Buttons with data-copy="<element id>" (or "mail-all") copy that text.
+        (() => {
+            const status = document.getElementById("copy-status");
+            const textFor = (id) => {
+                if (id === "mail-all") {
+                    const subject = document.getElementById("mail-subject");
+                    const body = document.getElementById("mail-body").value;
+                    return subject ? `Subject: ${subject.value}\n\n${body}` : body;
+                }
+                return document.getElementById(id).value;
+            };
+            const fallbackCopy = (text) => {
+                const area = document.createElement("textarea");
+                area.value = text;
+                document.body.appendChild(area);
+                area.select();
+                document.execCommand("copy");
+                area.remove();
+            };
+            document.querySelectorAll("[data-copy]").forEach((button) => {
+                button.addEventListener("click", async () => {
+                    const text = textFor(button.dataset.copy);
+                    try {
+                        await navigator.clipboard.writeText(text);
+                    } catch {
+                        fallbackCopy(text);
+                    }
+                    if (status) status.textContent = "Copied to the clipboard.";
+                });
+            });
+        })();
+    </script>
+{% endmacro %}
+
+{% macro mail_output(mail, editable=false) %}
+    {% if mail.subject %}
+        <div class="mail-field">
+            <div class="label-row">
+                <label for="mail-subject">Subject</label>
+                <button type="button" class="secondary small" data-copy="mail-subject">Copy</button>
+            </div>
+            <input id="mail-subject" type="text" value="{{ mail.subject }}" {% if not editable %}readonly{% endif %}>
+        </div>
+    {% endif %}
+
+    <div class="mail-field">
+        <div class="label-row">
+            <label for="mail-body">Body</label>
+            <button type="button" class="secondary small" data-copy="mail-body">Copy</button>
+        </div>
+        <textarea id="mail-body" class="mail-body" {% if not editable %}readonly{% endif %}>{{ mail.body }}</textarea>
+    </div>
+    <p class="hint" role="status" id="copy-status"></p>
+{% endmacro %}
+
 {% macro advice_sections(sections) %}
     {% for section in sections %}
         <h3>{{ section.title }}</h3>
@@ -50,7 +107,7 @@
     {% endfor %}
 {% endmacro %}
 
-{% macro entry_items(activities, goal_titles, milestone_names) %}
+{% macro entry_items(activities, goal_titles, milestone_names, independent_ids=()) %}
     <div class="table-wrap">
         <table class="data">
             <thead>
@@ -82,11 +139,15 @@
                             {{ activity["minutes"] if activity["minutes"] is not none else "—" }}
                         </td>
                         <td>
-                            {% for goal_id in activity["goal_ids"] %}
-                                <div>{{ goal_titles.get(goal_id, "Goal unavailable") }}</div>
+                            {% if activity["id"] in independent_ids %}
+                                <span class="badge badge-independent">Independent task</span>
                             {% else %}
-                                <span class="muted">Unlinked</span>
-                            {% endfor %}
+                                {% for goal_id in activity["goal_ids"] %}
+                                    <div>{{ goal_titles.get(goal_id, "Goal unavailable") }}</div>
+                                {% else %}
+                                    <span class="muted">Unlinked</span>
+                                {% endfor %}
+                            {% endif %}
                         </td>
                     </tr>
                     {% for change in activity["milestone_changes"] %}

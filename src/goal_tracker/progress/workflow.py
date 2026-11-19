@@ -6,6 +6,9 @@ prompting or rendering, so each interface only collects input and shows output.
 
 import logging
 
+from goal_tracker.domain.enums import PeriodKind
+from goal_tracker.domain.models import PeriodSpec
+from goal_tracker.domain.periods import current_period_start
 from goal_tracker.domain.progress import (
     ActivityKind,
     ActivityState,
@@ -79,6 +82,44 @@ def allow_duplicate(draft: DailyProgressInput) -> DailyProgressInput:
             "allow_duplicate": True,
         }
     )
+
+
+def link_independent_work(
+    draft: DailyProgressInput,
+    independent_ids: set[str],
+    goal_service,
+    timezone: str,
+) -> DailyProgressInput:
+    """Link independent work items to the week's shared independent goal.
+
+    Called only when the user confirms saving. If the week has ended (or the
+    goal is no longer active) the items stay unlinked. The draft keeps its
+    request ID, and the goal is stable per week, so retries stay idempotent.
+    """
+    if not independent_ids:
+        return draft
+
+    period = PeriodSpec(
+        kind=PeriodKind.WEEKLY,
+        start_date=current_period_start(PeriodKind.WEEKLY, draft.activity_date),
+        timezone=timezone,
+    )
+    goal = goal_service.ensure_independent_goal(period)
+
+    if goal is None:
+        return draft
+
+    payload = draft.model_dump()
+    for activity in payload["activities"]:
+        if str(activity["id"]) in independent_ids:
+            activity["goal_ids"] = [goal["id"]]
+
+    return DailyProgressInput.model_validate(payload)
+
+
+def without_independent_goals(goals: list[dict]) -> list[dict]:
+    """Hide the automatic independent goal from goal pickers."""
+    return [goal for goal in goals if not goal.get("is_independent")]
 
 
 def load_all_pending(service, as_of) -> list[dict]:

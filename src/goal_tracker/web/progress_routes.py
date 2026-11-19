@@ -32,10 +32,12 @@ from goal_tracker.progress.workflow import (
     ExtractionUnavailable,
     allow_duplicate,
     extract_journal_items,
+    link_independent_work,
     load_all_pending,
     load_goal_lookup,
     milestone_state_choices,
     updatable_pending,
+    without_independent_goals,
 )
 from goal_tracker.web.dependencies import (
     get_context,
@@ -70,7 +72,12 @@ def _blank_item() -> dict:
         "milestone_state": "done",
         "quote": "",
         "updates": "",
+        "related": "goal",
     }
+
+
+def _parse_ids(value: str) -> set[str]:
+    return {part for part in value.split(",") if part}
 
 
 def _milestone_names(goals) -> dict[str, str]:
@@ -105,7 +112,9 @@ def _editor_response(
     warning: str | None = None,
     status_code: int = 200,
 ):
-    goals = get_progress_service(request).list_recordable_goals(activity_date)
+    goals = without_independent_goals(
+        get_progress_service(request).list_recordable_goals(activity_date)
+    )
 
     return templates.TemplateResponse(
         request=request,
@@ -130,6 +139,7 @@ def _review_response(
     request: Request,
     draft: DailyProgressInput,
     *,
+    independent_ids: set[str] | None = None,
     duplicates: list[dict] | None = None,
     error: str | None = None,
     status_code: int = 200,
@@ -137,6 +147,7 @@ def _review_response(
     goals = get_progress_service(request).list_recordable_goals(
         draft.activity_date
     )
+    independent_ids = independent_ids or set()
 
     return templates.TemplateResponse(
         request=request,
@@ -144,6 +155,8 @@ def _review_response(
         context={
             "draft": draft.model_dump(mode="json"),
             "draft_json": draft.model_dump_json(),
+            "independent_ids": independent_ids,
+            "independent_field": ",".join(sorted(independent_ids)),
             "goal_titles": {goal["id"]: goal["title"] for goal in goals},
             "milestone_names": _milestone_names(goals),
             "duplicates": duplicates or [],
@@ -173,6 +186,7 @@ def _items_from_form(form, count: int) -> list[dict]:
                 "milestone_state": form.get(prefix + "milestone_state", "done"),
                 "quote": _normalize_text(form.get(prefix + "quote", "")),
                 "updates": form.get(prefix + "updates", ""),
+                "related": form.get(prefix + "related", "goal"),
             }
         )
 
@@ -182,12 +196,18 @@ def _items_from_form(form, count: int) -> list[dict]:
 def _build_activities(
     items: list[dict],
     goals: list[dict],
-) -> tuple[list[ActivityInput], list[str]]:
-    """Validate editor rows with the same rules as the terminal workflow."""
+) -> tuple[list[ActivityInput], list[str], set[str]]:
+    """Validate editor rows with the same rules as the terminal workflow.
+
+    Also returns the IDs of independent work items: work that is not related
+    to a listed goal (or has no goal ticked). They are linked to the week's
+    shared independent goal only when the entry is saved.
+    """
     goal_lookup = {goal["id"]: goal for goal in goals}
     activities: list[ActivityInput] = []
     errors: list[str] = []
     used_milestones: set[str] = set()
+    independent_ids: set[str] = set()
 
     for number, item in enumerate(items, start=1):
         if not item["include"]:
@@ -221,14 +241,28 @@ def _build_activities(
                 )
                 continue
 
-        unknown = [g for g in item["goal_ids"] if g not in goal_lookup]
+        independent = (
+            kind == ActivityKind.ACTIVITY
+            and not item["updates"]
+            and (item["related"] == "independent" or not item["goal_ids"])
+        )
+        goal_ids = [] if independent else item["goal_ids"]
+
+        if independent and item["milestone_ids"]:
+            errors.append(
+                f"{label}: independent tasks cannot change milestones. "
+                "Choose “Related to a listed goal” to update a milestone."
+            )
+            continue
+
+        unknown = [g for g in goal_ids if g not in goal_lookup]
         if unknown:
             errors.append(
                 f"{label}: a selected goal does not accept progress on this date."
             )
             continue
 
-        linked = [goal_lookup[g] for g in item["goal_ids"]]
+        linked = [goal_lookup[g] for g in goal_ids]
         allowed = {
             milestone["id"]
             for goal in linked
@@ -275,30 +309,36 @@ def _build_activities(
                 )
 
         try:
-            activities.append(
-                ActivityInput(
-                    kind=kind,
-                    description=item["description"],
-                    state=state,
-                    minutes=minutes,
-                    goal_ids=item["goal_ids"],
-                    evidence_quote=item["quote"] or None,
-                    updates_activity_id=item["updates"] or None,
-                    milestone_changes=changes,
-                )
+            activity = ActivityInput(
+                kind=kind,
+                description=item["description"],
+                state=state,
+                minutes=minutes,
+                goal_ids=goal_ids,
+                evidence_quote=item["quote"] or None,
+                updates_activity_id=item["updates"] or None,
+                milestone_changes=changes,
             )
         except ValidationError as error:
             errors.extend(
                 f"{label}: {message}" for message in validation_messages(error)
             )
+            continue
+
+        activities.append(activity)
+        if independent:
+            independent_ids.add(str(activity.id))
 
     if not activities and not errors:
         errors.append("Include at least one item in this entry.")
 
-    return activities, errors
+    return activities, errors, independent_ids
 
 
-def _items_from_draft(draft: DailyProgressInput) -> list[dict]:
+def _items_from_draft(
+    draft: DailyProgressInput,
+    independent_ids: set[str],
+) -> list[dict]:
     items = []
 
     for activity in draft.activities:
@@ -318,6 +358,11 @@ def _items_from_draft(draft: DailyProgressInput) -> list[dict]:
                     str(activity.updates_activity_id)
                     if activity.updates_activity_id
                     else ""
+                ),
+                "related": (
+                    "independent"
+                    if str(activity.id) in independent_ids
+                    else "goal"
                 ),
             }
         )
@@ -515,7 +560,7 @@ async def submit_items(request: Request):
 
     service = get_progress_service(request)
     goals = service.list_recordable_goals(activity_date)
-    activities, errors = _build_activities(items, goals)
+    activities, errors, independent_ids = _build_activities(items, goals)
 
     draft = None
     if not errors:
@@ -541,13 +586,19 @@ async def submit_items(request: Request):
         )
 
     duplicates = service.find_duplicates(draft.activity_date, draft.raw_text)
-    return _review_response(request, draft, duplicates=duplicates)
+    return _review_response(
+        request,
+        draft,
+        independent_ids=independent_ids,
+        duplicates=duplicates,
+    )
 
 
 @router.post("/progress/edit", include_in_schema=False)
 def edit_draft(
     request: Request,
     draft_json: Annotated[str, Form()],
+    independent_ids: Annotated[str, Form()] = "",
 ):
     try:
         draft = DailyProgressInput.model_validate_json(draft_json)
@@ -562,7 +613,7 @@ def edit_draft(
         activity_date=draft.activity_date,
         raw_text=draft.raw_text,
         source=draft.source.value,
-        items=_items_from_draft(draft),
+        items=_items_from_draft(draft, _parse_ids(independent_ids)),
     )
 
 
@@ -571,6 +622,7 @@ def save_entry(
     request: Request,
     draft_json: Annotated[str, Form()],
     allow_duplicate_entry: Annotated[str, Form()] = "",
+    independent_ids: Annotated[str, Form()] = "",
 ):
     try:
         draft = DailyProgressInput.model_validate_json(draft_json)
@@ -583,19 +635,33 @@ def save_entry(
     if allow_duplicate_entry == "1":
         draft = allow_duplicate(draft)
 
+    independent = _parse_ids(independent_ids)
     service = get_progress_service(request)
 
     try:
-        result = service.record_progress(draft)
+        linked = link_independent_work(
+            draft,
+            independent,
+            get_goal_service(request),
+            get_context(request).settings.timezone,
+        )
+        result = service.record_progress(linked)
     except DuplicateReviewRequiredError:
         return _review_response(
             request,
             draft,
+            independent_ids=independent,
             duplicates=service.find_duplicates(draft.activity_date, draft.raw_text),
             status_code=409,
         )
     except AppError as error:
-        return _review_response(request, draft, error=str(error), status_code=400)
+        return _review_response(
+            request,
+            draft,
+            independent_ids=independent,
+            error=str(error),
+            status_code=400,
+        )
 
     return RedirectResponse(
         url=f"/progress/entries/{result['entry']['id']}?saved=1",

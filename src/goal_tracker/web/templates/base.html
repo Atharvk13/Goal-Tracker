@@ -193,6 +193,7 @@
             background: var(--warn-bg); color: var(--warn-fg);
         }
         .badge-overdue, .badge-failed { background: var(--err-bg); color: var(--err-fg); }
+        .badge-independent { background: var(--accent-soft); color: var(--accent); }
 
         /* ---------- Panels and layout ---------- */
         .card, form.panel {
@@ -454,6 +455,24 @@
 
         .period-line { margin: 20px 0 0; }
 
+        /* ---------- Daily mail ---------- */
+        .mail-field { margin-bottom: 20px; }
+        .mail-field .label-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .mail-field label { margin: 0; }
+        .mail-body {
+            min-height: 380px;
+            font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+            font-size: 0.92rem;
+            line-height: 1.55;
+        }
+        button.small { padding: 6px 14px; font-size: 0.9rem; }
+
         @media (max-width: 560px) {
             .card, form.panel { padding: 18px; }
             main { margin-top: 24px; }
@@ -474,7 +493,8 @@
                 Goal Tracker
             </a>
             <a href="/goals" {% if path.startswith("/goals") %}aria-current="page"{% endif %}>Goals</a>
-            <a href="/progress" {% if path.startswith("/progress") %}aria-current="page"{% endif %}>Progress</a>
+            <a href="/progress" {% if path.startswith("/progress") and path != "/progress/mail" %}aria-current="page"{% endif %}>Progress</a>
+            <a href="/mail" {% if path.startswith("/mail") or path == "/progress/mail" %}aria-current="page"{% endif %}>Daily mail</a>
             <a href="/summary" {% if path.startswith("/summary") %}aria-current="page"{% endif %}>Summary</a>
             <a href="/reports" {% if path.startswith("/reports") %}aria-current="page"{% endif %}>Reports</a>
         </nav>

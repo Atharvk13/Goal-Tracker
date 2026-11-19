@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     llm_temperature: float = Field(default=0, ge=0, le=2)
     llm_timeout_seconds: float = Field(default=120, gt=0)
+    # Tokens of context to request from Ollama. Without it Ollama may use the
+    # model's maximum (262k for qwen3), which needs ~18 GB of memory.
+    llm_context_length: int = Field(default=8192, ge=2048, le=262144)
     llm_structured_method: Literal[
         "json_schema", "json_mode", "function_calling"
     ] = "json_schema"
@@ -27,6 +30,10 @@ class Settings(BaseSettings):
     log_level: Literal[
         "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
     ] = "INFO"
+
+    # Optional path to your own daily mail template; the bundled
+    # mail/daily_template.txt is used when this is not set.
+    daily_mail_template: Path | None = None
 
 
 def load_settings(env_file: str | None = None) -> Settings:

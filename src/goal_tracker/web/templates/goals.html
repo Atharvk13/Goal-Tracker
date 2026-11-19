@@ -53,6 +53,7 @@
                 <h2>
                     <a href="/goals/{{ goal['id'] }}">{{ goal["title"] }}</a>
                     <span class="badge badge-{{ goal['lifecycle_status'] }}">{{ goal["lifecycle_status"] | label }}</span>
+        {% if goal.get("is_independent") %}<span class="badge badge-independent" title="Collects work not related to a planned goal; never affects completion.">Independent</span>{% endif %}
                 </h2>
 
                 {% if goal.get("description") %}

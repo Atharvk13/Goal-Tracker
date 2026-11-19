@@ -1,0 +1,23 @@
+Subject: Daily Update – {{date_long}}
+
+Hi Arpan,
+
+Please find my daily update below.
+
+1. Meetings / Activities
+{{other_tasks}}
+
+2. Use Cases / Activities Completed
+{{goal_tasks}}
+
+3. Learning
+{{learnings}}
+
+4. Plan for Tomorrow
+{{all_open_tasks}}
+
+5. Blockers / Support Required
+{{challenges}}
+
+Regards,
+Atharv

@@ -33,7 +33,7 @@ def test_bundled_migration_creates_application_schema(tmp_path):
 
     result = migrate_database(database_path, backup_dir)
 
-    assert result.applied_versions == (1,)
+    assert result.applied_versions == (1, 2)
     assert result.backup_path is None
     assert not backup_dir.exists()
 
@@ -64,12 +64,19 @@ def test_bundled_migration_creates_application_schema(tmp_path):
         )
 
         history = connection.execute(
-            "SELECT version, filename FROM schema_migrations"
+            "SELECT version, filename FROM schema_migrations ORDER BY version"
         ).fetchall()
 
-        assert len(history) == 1
-        assert history[0]["version"] == 1
-        assert history[0]["filename"] == "001_initial.sql"
+        assert [(row["version"], row["filename"]) for row in history] == [
+            (1, "001_initial.sql"),
+            (2, "002_independent_goals.sql"),
+        ]
+
+        goal_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(goals)")
+        }
+        assert "is_independent" in goal_columns
 
 
 def test_repeated_migration_is_a_no_op(migration_project):

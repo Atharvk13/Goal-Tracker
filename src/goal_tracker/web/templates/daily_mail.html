@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import copy_script, mail_output %}
+
+{% block title %}Mail From Saved Progress | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block styles %}
+    <style>
+        .placeholders td:first-child { white-space: nowrap; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <a href="/mail?on={{ day }}">← Write the mail from your answers</a>
+    <header class="page-header">
+        <div>
+            <h1>Mail from saved progress</h1>
+            <p class="intro">
+                Filled automatically from the entries saved on {{ day }}.
+            </p>
+        </div>
+        <button type="button" data-copy="mail-all">Copy subject and body</button>
+    </header>
+
+    <form class="filters" action="/progress/mail" method="get">
+        <div class="field">
+            <label for="on">Day</label>
+            <input id="on" name="on" type="date" max="{{ today }}" value="{{ day }}">
+        </div>
+        <button type="submit" class="secondary">Show mail</button>
+        <a href="/progress/new">Record progress</a>
+    </form>
+
+    {% for warning in warnings %}
+        <p class="warning" role="status">{{ warning }}</p>
+    {% endfor %}
+
+    {% if not entry_count %}
+        <p class="notice">
+            No entries are saved for {{ day }} yet, so task sections show “None”.
+            <a href="/mail?on={{ day }}">Write the mail from your answers</a> instead,
+            or <a href="/progress/new">record progress</a> first.
+        </p>
+    {% endif %}
+
+    <section class="card">
+        {{ mail_output(mail) }}
+    </section>
+
+    <details class="card">
+        <summary><strong>Template and placeholders</strong></summary>
+        <p class="hint">
+            Template file: <code>{{ template_path }}</code>
+            {% if is_default_template %}
+                (bundled default — set <code>GT_DAILY_MAIL_TEMPLATE</code> in your
+                <code>.env</code> to use your own file).
+            {% endif %}
+        </p>
+        <p class="hint">
+            Start the file with <code>Subject: …</code> for the subject line. Write
+            placeholders as <code>{{ "{{name}}" }}</code>.
+        </p>
+        <div class="table-wrap">
+            <table class="data placeholders">
+                <thead><tr><th>Placeholder</th><th>Filled with</th></tr></thead>
+                <tbody>
+                    {% for name, description in placeholders.items() %}
+                        <tr><td><code>{{ "{{" ~ name ~ "}}" }}</code></td><td>{{ description }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+
+    {{ copy_script() }}
+{% endblock %}

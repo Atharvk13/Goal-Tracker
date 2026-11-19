@@ -169,6 +169,18 @@ def _summarize_goal(
     else:
         completion_status = "not_started"
 
+    is_independent = bool(goal.get("is_independent", False))
+
+    if is_independent:
+        # Independent work is shown but never scored, so it cannot
+        # raise or lower plan completion.
+        revised_scored = False
+        revised_percentage = None
+        completion_status = "independent"
+
+        for item in milestones:
+            item["overdue"] = False
+
     planned = [
         item for item in included
         if item["due_date"] <= cutoff_text
@@ -182,7 +194,8 @@ def _summarize_goal(
         "revision": revision["revision"],
         "lifecycle_status": revision["lifecycle_status"],
         "completion_status": completion_status,
-        "is_original_plan": bool(goal["is_original_plan"]),
+        "is_original_plan": bool(goal["is_original_plan"]) and not is_independent,
+        "is_independent": is_independent,
         "original_title": original["title"],
         "original_expected_outcome": original["expected_outcome"],
         "deadline": deadline,
@@ -191,7 +204,7 @@ def _summarize_goal(
         "baseline_total": len(baseline),
         "original_completion": (
             completion_percentage(baseline_done, len(baseline))
-            if goal["is_original_plan"]
+            if goal["is_original_plan"] and not is_independent
             else None
         ),
         "creation_completion": completion_percentage(
@@ -211,7 +224,8 @@ def _summarize_goal(
             not item["is_included"] for item in milestones
         ),
         "overdue": (
-            revised_scored
+            not is_independent
+            and revised_scored
             and revised_percentage != 100
             and (
                 any(item["overdue"] for item in milestones)

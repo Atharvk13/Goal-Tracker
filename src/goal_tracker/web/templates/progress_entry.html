@@ -29,7 +29,8 @@
     </section>
 
     <div class="actions">
-        <a class="button" href="/progress/new">Record another entry</a>
+        <a class="button" href="/progress/mail?on={{ entry['activity_date'] }}">Create mail for this day</a>
+        <a class="button secondary" href="/progress/new">Record another entry</a>
         <a href="/progress/pending">Pending work</a>
     </div>
 {% endblock %}

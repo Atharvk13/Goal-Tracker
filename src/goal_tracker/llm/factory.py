@@ -9,5 +9,6 @@ def create_model(settings: Settings) -> ChatOllama:
         model=settings.llm_model,
         base_url=settings.ollama_base_url,
         temperature=settings.llm_temperature,
+        num_ctx=settings.llm_context_length,
         client_kwargs={"timeout": settings.llm_timeout_seconds},
     )

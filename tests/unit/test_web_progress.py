@@ -37,10 +37,10 @@ def _item(index=0, **fields):
 
 
 def _submit(web, *, raw_text="Built the progress pages today.", source="manual",
-            items=None, action="review"):
+            items=None, action="review", on=None):
     items = items or [_item()]
     data = {
-        "activity_date": web.today.isoformat(),
+        "activity_date": (on or web.today).isoformat(),
         "raw_text": raw_text,
         "source": source,
         "item_count": str(len(items)),
@@ -53,11 +53,20 @@ def _submit(web, *, raw_text="Built the progress pages today.", source="manual",
 
 def _save(web, review, **extra):
     draft_json = input_values(review.text, "draft_json")[0]
+    independent = input_values(review.text, "independent_ids")
     return web.client.post(
         "/progress/save",
-        data={"draft_json": draft_json, **extra},
+        data={
+            "draft_json": draft_json,
+            "independent_ids": independent[0] if independent else "",
+            **extra,
+        },
         follow_redirects=False,
     )
+
+
+def _independent_goals(web):
+    return [g for g in web.goals.list_goals() if g["is_independent"]]
 
 
 def test_manual_entry_is_reviewed_then_saved_once(web, goal):
@@ -115,14 +124,15 @@ def test_incomplete_work_records_milestones_as_not_done(web, goal):
     assert change["state"] == "not_done"
 
 
-def test_milestone_requires_its_goal_to_be_linked(web, goal):
+def test_milestone_requires_a_linked_goal(web, goal):
+    # No goal ticked makes the work independent, which cannot change milestones.
     response = _submit(
         web,
         items=[_item(milestone=goal["milestones"][0]["id"])],
     )
 
     assert response.status_code == 422
-    assert "link the goal of every milestone" in response.text
+    assert "independent tasks cannot change milestones" in response.text
 
 
 def test_add_item_keeps_existing_values(web):
@@ -280,3 +290,138 @@ def test_progress_home_lists_entries(web):
     assert page.status_code == 200
     assert web.today.isoformat() in page.text
     assert "Built the progress pages today." in page.text
+
+
+def test_independent_task_uses_one_shared_goal(web, goal):
+    # "Independent" wins even if a goal box was left ticked.
+    review = _submit(
+        web,
+        items=[_item(description="Answered support emails",
+                     related="independent", goal=goal["id"])],
+    )
+    assert review.status_code == 200, review.text
+    assert "Independent task" in review.text
+    assert _independent_goals(web) == []  # nothing created before confirming
+
+    assert _save(web, review).status_code == 303
+    independent = _independent_goals(web)
+    assert len(independent) == 1
+    assert independent[0]["title"] == "Independent tasks"
+
+    entry = web.progress.get_daily_progress(web.today, web.today)[0]
+    assert entry["activities"][0]["goal_ids"] == [independent[0]["id"]]
+
+    # A second independent task (no goal ticked) reuses the same goal.
+    _save(web, _submit(web, raw_text="More admin.",
+                       items=[_item(description="Booked travel")]))
+    assert len(_independent_goals(web)) == 1
+
+    # The automatic goal is not offered in the goal picker.
+    editor = web.client.post(
+        "/progress/start",
+        data={"activity_date": web.today.isoformat(), "raw_text": "x", "method": "manual"},
+    )
+    assert "Ship the web UI" in editor.text
+    assert "Independent tasks</span>" not in editor.text
+
+
+def test_editing_a_draft_keeps_the_independent_choice(web, goal):
+    review = _submit(web, items=[_item(related="independent")])
+
+    editor = web.client.post(
+        "/progress/edit",
+        data={
+            "draft_json": input_values(review.text, "draft_json")[0],
+            "independent_ids": input_values(review.text, "independent_ids")[0],
+        },
+    )
+
+    assert editor.status_code == 200
+    assert 'name="item-0-related" value="independent" checked' in editor.text
+
+
+def test_independent_work_in_an_ended_week_is_saved_unlinked(web):
+    last_week = web.today - timedelta(days=web.today.weekday() + 3)
+
+    saved = _save(web, _submit(web, on=last_week, items=[_item(description="Old admin")]))
+
+    assert saved.status_code == 303
+    entry = web.progress.get_daily_progress(last_week, last_week)[0]
+    assert entry["activities"][0]["goal_ids"] == []
+    assert _independent_goals(web) == []
+
+
+def test_independent_goal_is_badged_on_goal_pages(web):
+    _save(web, _submit(web, items=[_item(description="Admin")]))
+    goal_id = _independent_goals(web)[0]["id"]
+
+    assert "badge-independent" in web.client.get("/goals").text
+    assert "badge-independent" in web.client.get(f"/goals/{goal_id}").text
+
+
+def test_daily_mail_groups_goal_and_other_tasks(web, goal):
+    _save(
+        web,
+        _submit(
+            web,
+            raw_text="Built pages. Answered emails. Learned macros.",
+            items=[
+                _item(0, description="Built pages", goal=goal["id"]),
+                _item(1, description="Answered emails", related="independent",
+                      minutes="30"),
+                {
+                    "item-2-include": "on",
+                    "item-2-kind": "learning",
+                    "item-2-description": "Jinja macros",
+                },
+            ],
+        ),
+    )
+
+    page = web.client.get(f"/progress/mail?on={web.today}")
+
+    assert page.status_code == 200
+    assert 'value="Daily Update – ' in page.text
+    assert (
+        "1. Meetings / Activities\n- Answered emails (Completed, 30 min)"
+        in page.text
+    )
+    assert (
+        "2. Use Cases / Activities Completed\n"
+        "Ship the web UI:\n  - Built pages (Completed, 45 min)"
+    ) in page.text
+    assert "3. Learning\n- Jinja macros" in page.text
+    assert "5. Blockers / Support Required\n- None" in page.text
+    assert "Unknown placeholders" not in page.text
+
+
+def test_daily_mail_plan_lists_all_open_work(web, goal):
+    _save(web, _submit(web, raw_text="Started the API.",
+                       items=[_item(description="Build the API", state="in_progress",
+                                    goal=goal["id"])]))
+
+    page = web.client.get(f"/progress/mail?on={web.today}")
+
+    assert "4. Plan for Tomorrow\n- Build the API (In progress, 45 min)" in page.text
+
+
+def test_daily_mail_uses_custom_template_and_flags_unknown(web, tmp_path):
+    custom = tmp_path / "mine.txt"
+    custom.write_text("Subject: Status {{date}}\n\n{{other_tasks}}\n{{mood}}",
+                      encoding="utf-8")
+    web.context.settings.daily_mail_template = custom
+
+    page = web.client.get("/progress/mail")
+
+    assert f'value="Status {web.today.isoformat()}"' in page.text
+    assert "Unknown placeholders were left unchanged: {{mood}}" in page.text
+
+
+def test_daily_mail_falls_back_when_template_missing(web, tmp_path):
+    web.context.settings.daily_mail_template = tmp_path / "missing.txt"
+
+    page = web.client.get("/progress/mail")
+
+    assert page.status_code == 200
+    assert "could not be read" in page.text
+    assert "Hi Arpan," in page.text

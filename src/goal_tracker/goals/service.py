@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from goal_tracker.db.connection import open_database, transaction
@@ -27,13 +27,18 @@ from goal_tracker.domain.goal_changes import (
     GoalUpdate,
     PlanFinalize,
 )
-from goal_tracker.domain.models import GoalCreate
+from goal_tracker.domain.models import GoalCreate, PeriodSpec
 from goal_tracker.goals.changes import (
     apply_goal_update,
     apply_lifecycle_change,
     apply_plan_finalize,
 )
 
+
+INDEPENDENT_GOAL_TITLE = "Independent tasks"
+INDEPENDENT_GOAL_DESCRIPTION = "Work that is not related to a planned goal."
+INDEPENDENT_GOAL_MILESTONE = "Log independent work"
+_INDEPENDENT_NAMESPACE = UUID("6f1d8c2e-4b7a-4f3e-9c55-1a2b3c4d5e6f")
 
 MutationRequest = GoalCreate | GoalUpdate | GoalLifecycleChange | PlanFinalize
 MutationHandler = Callable[
@@ -284,6 +289,91 @@ class GoalService:
                 today,
             ),
         )
+
+    def ensure_independent_goal(self, period: PeriodSpec) -> dict | None:
+        """Return the period's shared "Independent tasks" goal, creating it once.
+
+        Returns None when the period has ended (no goals can be added) or the
+        existing independent goal is no longer active; callers then save the
+        work unlinked. The goal is effective from the period start so earlier
+        days of the same period can link to it, and it is never scored.
+        """
+        if period.timezone != self.timezone:
+            raise DomainValidationError(
+                "The goal timezone must match the application timezone."
+            )
+
+        def usable(goal: dict | None) -> dict | None:
+            if goal is None or goal["lifecycle_status"] != "active":
+                return None
+            return goal
+
+        with self._session(write=False) as connection:
+            repository = GoalRepository(connection)
+            stored = repository.find_period(period)
+
+            if stored is not None:
+                existing = repository.find_independent_goal(stored["id"])
+
+                if existing is not None:
+                    return usable(existing)
+
+        if period.end_date < self._today():
+            return None
+
+        request = GoalCreate(
+            period=period,
+            title=INDEPENDENT_GOAL_TITLE,
+            description=INDEPENDENT_GOAL_DESCRIPTION,
+            milestones=[{"description": INDEPENDENT_GOAL_MILESTONE}],
+            request_id=uuid5(
+                _INDEPENDENT_NAMESPACE,
+                f"{period.kind.value}:{period.start_date}:{period.timezone}",
+            ),
+        )
+
+        def handler(connection: sqlite3.Connection, today: date):
+            repository = GoalRepository(connection)
+            stored = repository.find_period(period)
+
+            if stored is None:
+                period_id = str(uuid4())
+                repository.insert_period(period_id, period)
+            else:
+                period_id = stored["id"]
+                existing = repository.find_independent_goal(period_id)
+
+                if existing is not None:
+                    return None, existing
+
+            goal_id = str(uuid4())
+            repository.insert_goal(
+                goal_id=goal_id,
+                period_id=period_id,
+                goal=request,
+                effective_date=period.start_date,
+                is_original_plan=False,
+                is_independent=True,
+            )
+
+            saved = repository.get_goal(goal_id)
+
+            if saved is None:
+                raise StorageError("The saved goal could not be retrieved.")
+
+            return None, saved
+
+        result = self._execute_mutation(
+            request,
+            operation="ensure_independent_goal",
+            entity_type="goal",
+            result_key="goal",
+            action="created",
+            reason="Independent tasks goal created.",
+            handler=handler,
+        )
+
+        return usable(self.get_goal(result["goal"]["id"]))
 
     def update_goal(self, request: GoalUpdate) -> dict:
         """Append reviewed goal and milestone revisions."""
