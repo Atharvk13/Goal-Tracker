@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Goal | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/goals/{{ goal['id'] }}">← Goal details</a>
+
+    <h1>Edit goal</h1>
+    <p class="intro">
+        Update the details below, then review your changes before saving.
+        Milestones and period dates remain unchanged in this form.
+    </p>
+
+    <p class="hint">
+        {{ goal["period"]["kind"] | title }}:
+        {{ goal["period"]["start_date"] }} to
+        {{ goal["period"]["end_date"] }}.
+        Editing revision {{ values["expected_revision"] }}.
+    </p>
+
+    {% if errors %}
+        <section class="errors" role="alert">
+            <strong>Please check the following:</strong>
+            <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            <p>
+                <a href="/goals/{{ goal['id'] }}/edit">
+                    Reload the latest goal
+                </a>
+                (discards unsaved changes).
+            </p>
+        </section>
+    {% endif %}
+
+    <form class="panel" action="/goals/{{ goal['id'] }}/edit/review" method="post">
+        <input
+            type="hidden"
+            name="expected_revision"
+            value="{{ values['expected_revision'] }}"
+        >
+
+        <div class="field">
+            <label for="title">Goal title</label>
+            <input
+                id="title"
+                name="title"
+                type="text"
+                value="{{ values.get('title', '') }}"
+                required
+            >
+        </div>
+
+        <div class="field">
+            <label for="description">Description (optional)</label>
+            <textarea id="description" name="description">{{ values.get("description", "") }}</textarea>
+        </div>
+
+        <div class="field">
+            <label for="expected_outcome">Expected outcome (optional)</label>
+            <textarea id="expected_outcome" name="expected_outcome">{{ values.get("expected_outcome", "") }}</textarea>
+        </div>
+
+        <div class="field">
+            <label for="target_date">Goal deadline (optional)</label>
+            <input
+                id="target_date"
+                name="target_date"
+                type="date"
+                value="{{ values.get('target_date', '') }}"
+                aria-describedby="deadline-hint"
+            >
+            <p class="hint" id="deadline-hint">
+                Leave blank to use the period end. Existing milestone
+                deadlines must fit within the new goal deadline.
+            </p>
+        </div>
+
+        <div class="field">
+            <label for="reason">Reason for this edit</label>
+            <textarea id="reason" name="reason" required>{{ values.get("reason", "") }}</textarea>
+        </div>
+
+        <div class="field">
+            <label for="effective_date">Effective date (optional)</label>
+            <input
+                id="effective_date"
+                name="effective_date"
+                type="date"
+                value="{{ values.get('effective_date', '') }}"
+                aria-describedby="effective-hint"
+            >
+            <p class="hint" id="effective-hint">
+                Leave blank for the normal edit date. Corrections to
+                ended periods require an explicit effective date.
+            </p>
+        </div>
+
+        <div class="actions">
+            <button type="submit">Review changes →</button>
+            <a href="/goals/{{ goal['id'] }}">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

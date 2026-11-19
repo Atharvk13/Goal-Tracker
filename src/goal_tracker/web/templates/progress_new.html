@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import errors_box %}
+
+{% block title %}Record Progress | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/progress">← Daily progress</a>
+    <h1>Record progress</h1>
+    <p class="intro">
+        Write your journal in your own words. Next, you will turn it into
+        items, either yourself or with help from the local model.
+    </p>
+
+    {{ errors_box(errors) }}
+
+    <form class="panel" action="/progress/start" method="post">
+        <div class="field">
+            <label for="activity_date">Activity date</label>
+            <input
+                id="activity_date"
+                name="activity_date"
+                type="date"
+                max="{{ today }}"
+                value="{{ values.get('activity_date', '') }}"
+                required
+            >
+            <p class="hint">Today or an earlier date.</p>
+        </div>
+
+        <div class="field">
+            <label for="raw_text">Journal</label>
+            <textarea id="raw_text" name="raw_text" rows="8" required>{{ values.get("raw_text", "") }}</textarea>
+            <p class="hint">The original text is always kept with the entry.</p>
+        </div>
+
+        <fieldset class="checks">
+            <legend>How should items be created?</legend>
+            <label>
+                <input type="radio" name="method" value="manual"
+                    {% if values.get("method") != "ai" %}checked{% endif %}>
+                <span>Manually — I will add each item myself.</span>
+            </label>
+            <label>
+                <input type="radio" name="method" value="ai"
+                    {% if values.get("method") == "ai" %}checked{% endif %}>
+                <span>With AI — propose items from my journal for me to review.</span>
+            </label>
+        </fieldset>
+
+        <div class="actions">
+            <button type="submit" data-busy="Preparing items…">Continue →</button>
+            <a href="/progress">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

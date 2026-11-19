@@ -3,6 +3,7 @@ from rich.console import Console
 from goal_tracker.bootstrap import AppContext
 from goal_tracker.domain.errors import AppError
 from goal_tracker.mcp.services import get_report_service
+from goal_tracker.reporting.periods import find_unreported_periods
 
 
 def show_report_reminders(
@@ -12,29 +13,7 @@ def show_report_reminders(
     """Mention completed periods that do not have a saved report."""
     try:
         service = get_report_service(context)
-        missing = []
-        offset = 0
-        page_size = 50
-
-        while True:
-            periods = service.list_completed_periods(
-                limit=page_size,
-                offset=offset,
-            )
-
-            for period in periods:
-                reports = service.list_reports(
-                    period_id=period["id"],
-                    limit=1,
-                )
-
-                if not reports:
-                    missing.append(period)
-
-            if len(periods) < page_size:
-                break
-
-            offset += page_size
+        missing = find_unreported_periods(service)
 
     except AppError as error:
         context.logger.warning(

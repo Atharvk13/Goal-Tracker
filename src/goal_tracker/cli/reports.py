@@ -15,9 +15,14 @@ from goal_tracker.reporting.terminal import (
     show_report_list,
 )
 from goal_tracker.analysis.service import AnalysisService
-from goal_tracker.db.repositories.operations import calculate_payload_hash
 from goal_tracker.llm.gateway import ModelGateway
-from goal_tracker.reporting.evidence import build_recommendation_evidence
+from goal_tracker.reporting.advice import (
+    completed_period_spec,
+    gather_advice_evidence,
+    model_provenance,
+    recommendation_sections,
+    request_recommendations,
+)
 
 from goal_tracker.mcp.services import (
     get_analysis_service,
@@ -111,14 +116,7 @@ def _select_completed_period(
 
         selected = periods[index]
 
-        return (
-            selected["id"],
-            PeriodSpec(
-                kind=selected["kind"],
-                start_date=selected["start_date"],
-                timezone=selected["timezone"],
-            ),
-        )
+        return selected["id"], completed_period_spec(selected)
 
 
 def _generate_report(
@@ -137,12 +135,11 @@ def _generate_report(
         default=False,
         console=console,
     ):
-        facts = get_analysis_service(context).analyze_period(
+        evidence = gather_advice_evidence(
+            get_analysis_service(context),
             period,
-            as_of=period.end_date,
         )
-
-        selection = build_recommendation_evidence(facts)
+        selection = evidence.selection
 
         console.print(
             f"Selected {len(selection.evidence)} evidence records "
@@ -159,11 +156,10 @@ def _generate_report(
 
         try:
             with console.status("Preparing local AI suggestions..."):
-                proposed = ModelGateway(
-                    context.settings
-                ).recommend_next_period(
-                    selection.evidence,
-                    period_kind=period.kind.value,
+                proposed = request_recommendations(
+                    ModelGateway(context.settings),
+                    evidence,
+                    period,
                 )
 
         except Exception as error:
@@ -184,20 +180,7 @@ def _generate_report(
                 return None
 
         else:
-            sections = (
-                (
-                    "Areas for improvement",
-                    proposed.areas_for_improvement,
-                ),
-                (
-                    "Next-period suggestions",
-                    proposed.next_period_suggestions,
-                ),
-                (
-                    "Recommended future goals",
-                    proposed.recommended_goals,
-                ),
-            )
+            sections = recommendation_sections(proposed)
 
             console.print(
                 "\nAI suggestion preview",
@@ -231,17 +214,8 @@ def _generate_report(
                 console=console,
             ):
                 advisory = proposed
-                evidence_hash = calculate_payload_hash(facts)
-                provenance = {
-                    "provider": context.settings.llm_provider,
-                    "model": context.settings.llm_model,
-                    "temperature": (
-                        context.settings.llm_temperature
-                    ),
-                    "structured_method": (
-                        context.settings.llm_structured_method
-                    ),
-                }
+                evidence_hash = evidence.evidence_hash
+                provenance = model_provenance(context.settings)
 
     request_id = uuid4()
 

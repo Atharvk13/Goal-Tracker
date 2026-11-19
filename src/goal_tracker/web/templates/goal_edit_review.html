@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Review Goal Changes | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/goals/{{ draft.goal_id }}">← Goal details</a>
+
+    <h1>Review goal changes</h1>
+    <p class="intro">
+        Only the fields below will change. Confirm to save a new
+        revision while preserving the goal’s history.
+    </p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card" aria-labelledby="changes-heading">
+        <h2 id="changes-heading">Proposed values</h2>
+
+        <dl>
+            {% for field, value in changes.items() %}
+                <dt>{{ field | replace("_", " ") | title }}</dt>
+                <dd>{% if field == "target_date" and value is none %}Use the period end{% elif value == "" %}Clear this field{% else %}{{ value }}{% endif %}</dd>
+            {% endfor %}
+
+            <dt>Reason</dt>
+            <dd>{{ draft.reason }}</dd>
+
+            <dt>Effective date</dt>
+            <dd>{{ draft.effective_date or "Normal edit date" }}</dd>
+
+            <dt>Expected revision</dt>
+            <dd>{{ draft.expected_revision }}</dd>
+        </dl>
+
+        <div class="actions">
+            {% if not error %}
+                <form
+                    action="/goals/{{ draft.goal_id }}/edit/save"
+                    method="post"
+                >
+                    <input
+                        type="hidden"
+                        name="draft_json"
+                        value="{{ draft_json }}"
+                    >
+                    <button type="submit">Confirm and save changes</button>
+                </form>
+            {% endif %}
+
+            <a href="/goals/{{ draft.goal_id }}/edit">
+                Reopen edit form
+            </a>
+
+            <a href="/goals/{{ draft.goal_id }}">Cancel</a>
+        </div>
+    </section>
+{% endblock %}

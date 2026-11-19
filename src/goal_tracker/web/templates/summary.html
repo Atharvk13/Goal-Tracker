@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from "_macros.html" import errors_box, progress_bar, status_badge %}
+
+{% block title %}Progress Summary | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% macro item_list(title, items) %}
+    <section class="card">
+        <h2>{{ title }}</h2>
+        {% if items %}
+            <ul class="plain">
+                {% for item in items %}
+                    <li>
+                        {{ item.get("description", "No description") }}
+                        {% if item.get("carried_over") %}<span class="muted">(carryover)</span>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="muted">None recorded.</p>
+        {% endif %}
+    </section>
+{% endmacro %}
+
+{% block content %}
+    <h1>Progress summary</h1>
+    <p class="intro">
+        Facts calculated from your goals and entries. Choose a week (starting
+        Monday) or a month (starting on the 1st).
+    </p>
+
+    <form class="filters" action="/summary" method="get">
+        <div class="field">
+            <label for="kind">Period</label>
+            <select id="kind" name="kind">
+                <option value="weekly" {% if kind == "weekly" %}selected{% endif %}>Weekly</option>
+                <option value="monthly" {% if kind == "monthly" %}selected{% endif %}>Monthly</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="start">Period start</label>
+            <input id="start" name="start" type="date" value="{{ start }}">
+        </div>
+        <button type="submit" class="secondary">Show summary</button>
+        <a href="/summary?kind={{ kind }}">Current {{ "week" if kind == "weekly" else "month" }}</a>
+    </form>
+
+    {{ errors_box(errors) }}
+
+    {% if summary %}
+        {% set period = summary["period"] %}
+        <p class="period-line">
+            <strong>{{ period["kind"] | label }}:</strong>
+            {{ period["start_date"] }} to {{ period["end_date"] }}
+            · calculated through {{ summary["as_of"] }}
+            {% if summary["not_started"] %}· <span class="badge">Not started</span>{% endif %}
+            {% if summary["period_has_ended"] %}· <span class="badge">Ended</span>{% endif %}
+        </p>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="value">{{ summary["revised_completion"] | percent }}</span>
+                <span class="label">Current plan completion</span>
+                {{ progress_bar(summary["revised_completion"]) }}
+            </div>
+            <div class="stat">
+                <span class="value">{{ summary["original_completion"] | percent }}</span>
+                <span class="label">Original plan completion</span>
+                {{ progress_bar(summary["original_completion"]) }}
+            </div>
+            <div class="stat">
+                <span class="value">{{ summary["logging_consistency"] | percent }}</span>
+                <span class="label">Logging coverage ({{ summary["recorded_days"] }} of {{ summary["elapsed_days"] }} days)</span>
+            </div>
+            <div class="stat">
+                <span class="value">{{ summary["recorded_minutes"] if summary["recorded_minutes"] is not none else "—" }}</span>
+                <span class="label">Minutes recorded{% if summary["items_without_time"] %} ({{ summary["items_without_time"] }} items without time){% endif %}</span>
+            </div>
+            <div class="stat">
+                <span class="value">{{ summary["completed_due"] }} / {{ summary["planned_due"] }}</span>
+                <span class="label">Milestones due by cutoff completed</span>
+            </div>
+            <div class="stat">
+                <span class="value">{{ summary["revised_goal_count"] }}</span>
+                <span class="label">Goals in current plan ({{ summary["original_goal_count"] }} original, {{ summary["cancelled_goal_count"] }} cancelled)</span>
+            </div>
+        </div>
+
+        <section class="card">
+            <h2>Goal progress</h2>
+            {% if summary["goals"] %}
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <th>Goal</th>
+                                <th>Status</th>
+                                <th class="num">Original</th>
+                                <th class="num">Current</th>
+                                <th>Milestones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for goal in summary["goals"] %}
+                                <tr>
+                                    <td><a href="/goals/{{ goal['id'] }}">{{ goal["title"] }}</a></td>
+                                    <td>{{ status_badge(goal["completion_status"]) }}</td>
+                                    <td class="num">{{ goal["original_completion"] | percent }}</td>
+                                    <td class="num">{{ goal["revised_completion"] | percent }}</td>
+                                    <td>
+                                        {% if goal["revised_scored"] %}
+                                            {{ goal["revised_completed"] }}/{{ goal["revised_total"] }}
+                                            {{ progress_bar(goal["revised_completion"]) }}
+                                        {% else %}N/A{% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="muted">No goals were active in this period.</p>
+            {% endif %}
+        </section>
+
+        {% if summary["completion_trend"] %}
+            <section class="card">
+                <h2>Daily completion trend</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Completion</th>
+                                <th class="num">Goals</th>
+                                <th class="num">Entries</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for day in summary["completion_trend"] %}
+                                <tr>
+                                    <td>{{ day["date"] }}</td>
+                                    <td>
+                                        <div class="bar-row">
+                                            {{ progress_bar(day["completion"]) }}
+                                            <span>{{ day["completion"] | percent }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="num">{{ day["scored_goals"] }}</td>
+                                    <td class="num">{{ day["entries"] }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        {% endif %}
+
+        <div class="grid-2">
+            {{ item_list("Completed activities", summary["completed_activities"]) }}
+            {{ item_list("Pending activities", summary["pending_activities"]) }}
+            {{ item_list("Learnings", summary["learnings"]) }}
+            {{ item_list("Challenges", summary["challenges"]) }}
+            {{ item_list("Achievements", summary["achievements"]) }}
+        </div>
+
+        {% if carried_over %}
+            <p class="hint">
+                {{ carried_over }} pending item(s) started before this period
+                and are shown as carryover.
+            </p>
+        {% endif %}
+    {% endif %}
+{% endblock %}

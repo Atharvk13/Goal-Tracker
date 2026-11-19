@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+
+{% block title %}Reports | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% block content %}
+    <h1>Reports</h1>
+    <p class="intro">
+        Reports are saved snapshots of a completed week or month. Later
+        corrections appear only in a newly generated revision.
+    </p>
+
+    <section class="card" aria-labelledby="periods-heading">
+        <div class="card-header">
+            <h2 id="periods-heading">Completed periods</h2>
+            <nav class="tabs" aria-label="Period type">
+                <a href="/reports" {% if not kind %}aria-current="page"{% endif %}>All</a>
+                <a href="/reports?kind=weekly" {% if kind == "weekly" %}aria-current="page"{% endif %}>Weekly</a>
+                <a href="/reports?kind=monthly" {% if kind == "monthly" %}aria-current="page"{% endif %}>Monthly</a>
+            </nav>
+        </div>
+
+        {% if rows %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Dates</th>
+                            <th>Latest report</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td>{{ row.period["kind"] | label }}</td>
+                                <td>{{ row.period["start_date"] }} to {{ row.period["end_date"] }}</td>
+                                <td>
+                                    {% if row.latest %}
+                                        <a href="/reports/{{ row.latest['id'] }}">Revision {{ row.latest["revision"] }}</a>
+                                    {% else %}
+                                        <span class="badge badge-missing">No report yet</span>
+                                    {% endif %}
+                                </td>
+                                <td><a href="/reports/periods/{{ row.period['id'] }}">{% if row.latest %}Manage{% else %}Generate{% endif %} →</a></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">No completed periods yet. Reports become available after a period ends.</p>
+        {% endif %}
+
+        <nav class="pagination" aria-label="Period pages">
+            {% if page > 1 %}<a href="/reports?kind={{ kind }}&page={{ page - 1 }}&saved_page={{ saved_page }}">← Previous</a>{% endif %}
+            <span>Page {{ page }}</span>
+            {% if has_next %}<a href="/reports?kind={{ kind }}&page={{ page + 1 }}&saved_page={{ saved_page }}">Next →</a>{% endif %}
+        </nav>
+    </section>
+
+    <section class="card" aria-labelledby="saved-heading">
+        <h2 id="saved-heading">Saved reports</h2>
+
+        {% if saved %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Dates</th>
+                            <th class="num">Revision</th>
+                            <th>Generated</th>
+                            <th>PDF</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in saved %}
+                            <tr>
+                                <td><a href="/reports/{{ report['id'] }}">{{ report["kind"] | label }}</a></td>
+                                <td>{{ report["start_date"] }} to {{ report["end_date"] }}</td>
+                                <td class="num">{{ report["revision"] }}</td>
+                                <td>{{ report["generated_at"] | when }}</td>
+                                <td>{{ status_badge(report["export_status"]) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">No saved reports yet.</p>
+        {% endif %}
+
+        <nav class="pagination" aria-label="Saved report pages">
+            {% if saved_page > 1 %}<a href="/reports?kind={{ kind }}&page={{ page }}&saved_page={{ saved_page - 1 }}">← Previous</a>{% endif %}
+            <span>Page {{ saved_page }}</span>
+            {% if saved_has_next %}<a href="/reports?kind={{ kind }}&page={{ page }}&saved_page={{ saved_page + 1 }}">Next →</a>{% endif %}
+        </nav>
+    </section>
+{% endblock %}

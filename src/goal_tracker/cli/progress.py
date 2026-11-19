@@ -38,8 +38,19 @@ from goal_tracker.domain.progress import (
     DailyProgressInput,
     MilestoneProgress,
 )
-from goal_tracker.goals.service import GoalService
 from goal_tracker.progress.service import ProgressService
+from goal_tracker.progress.workflow import (
+    JOURNAL_CATEGORIES,
+    WORK_STATUSES,
+    ExtractionUnavailable,
+    allow_duplicate,
+    extract_journal_items,
+    load_all_pending,
+    load_goal_lookup,
+    milestone_candidates,
+    milestone_state_choices,
+    updatable_pending,
+)
 from goal_tracker.llm.gateway import ModelGateway
 
 from goal_tracker.mcp.services import (
@@ -175,12 +186,7 @@ def _select_milestone_changes(
     used_ids: set[str],
     console: Console,
 ) -> list[MilestoneProgress]:
-    candidates = [
-        (goal, milestone)
-        for goal in goals
-        for milestone in goal["milestones"]
-        if milestone["is_included"] and milestone["id"] not in used_ids
-    ]
+    candidates = milestone_candidates(goals, used_ids)
 
     if not candidates:
         return []
@@ -215,15 +221,17 @@ def _select_milestone_changes(
     if not selected:
         return []
 
-    if state == ActivityState.COMPLETED:
+    state_choices = milestone_state_choices(state)
+
+    if len(state_choices) > 1:
         milestone_state = Prompt.ask(
             "New milestone state",
-            choices=["done", "not_done"],
+            choices=state_choices,
             default="done",
             console=console,
         )
     else:
-        milestone_state = "not_done"
+        milestone_state = state_choices[0]
         console.print("Selected milestones will be recorded as not done.")
 
     changes = []
@@ -326,12 +334,7 @@ def _save_draft(
             console.print("Cancelled. No additional entry was requested.")
             return
 
-        draft = DailyProgressInput.model_validate(
-            {
-                **draft.model_dump(),
-                "allow_duplicate": True,
-            }
-        )
+        draft = allow_duplicate(draft)
 
     show_progress_draft(draft, goals, console)
 
@@ -354,22 +357,20 @@ def _review_ai_activities(
     """Extract and review work activities and other journal items."""
     try:
         with console.status("Interpreting your update with the local model..."):
-            proposal = ModelGateway(
-                context.settings
-            ).extract_progress(raw_text)
+            items = extract_journal_items(
+                ModelGateway(context.settings),
+                raw_text,
+                context.logger,
+            )
 
-    except Exception as error:
-        context.logger.warning(
-            "Progress extraction failed (%s).",
-            type(error).__name__,
-        )
+    except ExtractionUnavailable:
         console.print(
             "AI interpretation is unavailable. You can use manual entry.",
             style="yellow",
         )
         return None
 
-    if not proposal.activities:
+    if not items:
         console.print(
             "No supported journal items were found. "
             "You can use manual entry.",
@@ -379,9 +380,9 @@ def _review_ai_activities(
 
     activities = []
     used_milestones: set[str] = set()
-    work_statuses = ["completed", "pending", "in_progress"]
+    work_statuses = list(WORK_STATUSES)
 
-    for number, item in enumerate(proposal.activities, start=1):
+    for number, item in enumerate(items, start=1):
         console.print(f"\nItem {number}", style="bold")
         console.print(
             f"Description: {item.description}",
@@ -410,13 +411,7 @@ def _review_ai_activities(
         kind = ActivityKind(
             Prompt.ask(
                 "Category",
-                choices=[
-                    "activity",
-                    "learning",
-                    "challenge",
-                    "observation",
-                    "achievement",
-                ],
+                choices=list(JOURNAL_CATEGORIES),
                 default=item.kind,
                 console=console,
             )
@@ -558,27 +553,6 @@ def _record_entry(
     _save_draft(service, draft, goal_lookup, console)
 
 
-def _load_pending(
-    service: ProgressService,
-    as_of: date,
-) -> list[dict]:
-    activities = []
-    offset = 0
-
-    while True:
-        page = service.list_pending_activities(
-            as_of=as_of,
-            limit=100,
-            offset=offset,
-        )
-        activities.extend(page)
-
-        if len(page) < 100:
-            return activities
-
-        offset += 100
-
-
 def _update_pending(
     context: AppContext,
     service: ProgressService,
@@ -588,14 +562,10 @@ def _update_pending(
     goals = service.list_recordable_goals(activity_date)
     goal_lookup = {goal["id"]: goal for goal in goals}
 
-    pending = [
-        activity
-        for activity in _load_pending(service, activity_date)
-        if all(
-            goal_id in goal_lookup
-            for goal_id in activity["goal_ids"]
-        )
-    ]
+    pending = updatable_pending(
+        load_all_pending(service, activity_date),
+        goal_lookup,
+    )
 
     if not pending:
         console.print("No pending work can be updated on this date.")
@@ -661,20 +631,6 @@ def _update_pending(
     )
 
     _save_draft(service, draft, goal_lookup, console)
-
-
-def _load_goal_lookup(service: GoalService) -> dict[str, dict]:
-    goals = {}
-    offset = 0
-
-    while True:
-        page = service.list_goals(limit=100, offset=offset)
-        goals.update({goal["id"]: goal for goal in page})
-
-        if len(page) < 100:
-            return goals
-
-        offset += 100
 
 
 def _view_entries(
@@ -761,7 +717,7 @@ def run_progress_menu(
     try:
         service = get_progress_service(context)
         goal_service = get_goal_service(context)
-        goal_lookup = _load_goal_lookup(goal_service)
+        goal_lookup = load_goal_lookup(goal_service)
 
     except AppError as error:
         show_application_error(error, console)
@@ -799,7 +755,7 @@ def run_progress_menu(
             elif choice == "4":
                 as_of = _ask_activity_date(context, console)
                 show_pending_activities(
-                    _load_pending(service, as_of),
+                    load_all_pending(service, as_of),
                     goal_lookup,
                     console,
                 )

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Change Goal Status | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/goals/{{ goal['id'] }}">← Goal details</a>
+
+    <h1>Change goal status</h1>
+    <p class="intro">{{ goal["title"] }}</p>
+
+    <p class="hint">
+        Current status:
+        {{ goal["lifecycle_status"] | replace("_", " ") | title }}.
+        Goal history and milestones remain preserved.
+    </p>
+
+    {% if errors %}
+        <section class="errors" role="alert">
+            <strong>Please check the following:</strong>
+            <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            <p>
+                <a href="/goals/{{ goal['id'] }}/lifecycle">
+                    Reload the latest goal
+                </a>
+                (discards unsaved changes).
+            </p>
+        </section>
+    {% endif %}
+
+    {% if goal["lifecycle_status"] == "archived" %}
+        <p class="intro">
+            This goal is archived. No further status changes are available.
+        </p>
+    {% else %}
+        <form class="panel"
+            action="/goals/{{ goal['id'] }}/lifecycle/review"
+            method="post"
+        >
+            <input
+                type="hidden"
+                name="expected_revision"
+                value="{{ values['expected_revision'] }}"
+            >
+
+            <div class="field">
+                <label for="action">Action</label>
+                <select
+                    id="action"
+                    name="action"
+                    aria-describedby="action-hint"
+                    required
+                >
+                    {% if goal["lifecycle_status"] == "active" %}
+                        <option value="cancel"
+                            {% if values.get("action") == "cancel" %}selected{% endif %}>
+                            Cancel goal
+                        </option>
+                    {% endif %}
+
+                    <option value="archive"
+                        {% if values.get("action", "archive") == "archive" %}selected{% endif %}>
+                        Archive goal
+                    </option>
+                </select>
+                <p class="hint" id="action-hint">
+                    Cancel when you no longer intend to pursue the goal.
+                    Archive to retain it as a historical record.
+                    Archived goals cannot change status again.
+                </p>
+            </div>
+
+            <div class="field">
+                <label for="reason">Reason for this change</label>
+                <textarea id="reason" name="reason" required>{{ values.get("reason", "") }}</textarea>
+            </div>
+
+            <div class="field">
+                <label for="effective_date">Effective date (optional)</label>
+                <input
+                    id="effective_date"
+                    name="effective_date"
+                    type="date"
+                    value="{{ values.get('effective_date', '') }}"
+                    aria-describedby="effective-hint"
+                >
+                <p class="hint" id="effective-hint">
+                    Leave blank for the normal change date.
+                    Changes to ended periods require an explicit
+                    effective date.
+                </p>
+            </div>
+
+            <div class="actions">
+                <button type="submit">Review status change →</button>
+                <a href="/goals/{{ goal['id'] }}">Keep current status</a>
+            </div>
+        </form>
+    {% endif %}
+{% endblock %}

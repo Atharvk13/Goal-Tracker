@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -19,6 +19,7 @@ from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError
 from goal_tracker.domain.goal_changes import PlanFinalize
 from goal_tracker.domain.models import GoalCreate, MilestoneInput, PeriodSpec
+from goal_tracker.domain.periods import current_period_start
 from goal_tracker.goals.service import GoalService
 from goal_tracker.mcp.services import get_goal_service
 from collections.abc import Callable
@@ -31,11 +32,7 @@ def _ask_period(
 ) -> PeriodSpec:
     today = datetime.now(ZoneInfo(timezone)).date()
 
-    default_start = (
-        today - timedelta(days=today.weekday())
-        if kind == PeriodKind.WEEKLY
-        else today.replace(day=1)
-    )
+    default_start = current_period_start(kind, today)
 
     while True:
         start_date = ask_date(

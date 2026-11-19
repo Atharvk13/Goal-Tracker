@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% from "_macros.html" import errors_box %}
+
+{% block title %}Entry Items | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <a href="/progress">← Daily progress</a>
+    <h1>{% if source == "llm_reviewed" %}Review AI proposals{% else %}Add entry items{% endif %}</h1>
+    <p class="intro">
+        Activity date: <strong>{{ activity_date }}</strong>.
+        {% if source == "llm_reviewed" %}
+            Each proposal shows the exact quote it came from. Untick anything
+            you do not want, and correct the rest before reviewing.
+        {% else %}
+            Describe each piece of work, learning, challenge, observation or
+            achievement. Nothing is saved until you confirm on the next page.
+        {% endif %}
+    </p>
+
+    {% if warning %}
+        <p class="warning" role="status">{{ warning }}</p>
+    {% endif %}
+
+    {{ errors_box(errors) }}
+
+    <form class="panel" action="/progress/items" method="post">
+        <input type="hidden" name="activity_date" value="{{ activity_date }}">
+        <input type="hidden" name="source" value="{{ source }}">
+        <input type="hidden" name="item_count" value="{{ items | length }}">
+
+        <div class="field">
+            <label for="raw_text">Journal</label>
+            <textarea id="raw_text" name="raw_text" rows="5" required>{{ raw_text }}</textarea>
+            {% if source == "llm_reviewed" %}
+                <p class="hint">Quotes must still appear in this text if you edit it.</p>
+            {% endif %}
+        </div>
+
+        {% for item in items %}
+            {% set i = loop.index0 %}
+            {% set p = "item-" ~ i ~ "-" %}
+            <fieldset class="item">
+                <legend>Item {{ loop.index }}</legend>
+
+                <label class="inline">
+                    <input type="checkbox" name="{{ p }}include" {% if item.include %}checked{% endif %}>
+                    Include this item
+                </label>
+
+                {% if item.quote %}
+                    <input type="hidden" name="{{ p }}quote" value="{{ item.quote }}">
+                    <p class="quote">From your journal: “{{ item.quote }}”</p>
+                {% endif %}
+
+                {% if item.updates %}
+                    <input type="hidden" name="{{ p }}updates" value="{{ item.updates }}">
+                    <input type="hidden" name="{{ p }}kind" value="activity">
+                    <p class="hint">Status update for existing pending work.</p>
+                {% else %}
+                    <div class="field">
+                        <label for="{{ p }}kind">Category</label>
+                        <select id="{{ p }}kind" name="{{ p }}kind">
+                            {% for kind in kinds %}
+                                <option value="{{ kind }}" {% if item.kind == kind %}selected{% endif %}>{{ kind | label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                {% endif %}
+
+                <div class="field">
+                    <label for="{{ p }}description">Description</label>
+                    <input id="{{ p }}description" name="{{ p }}description" type="text" value="{{ item.description }}">
+                </div>
+
+                <div class="row">
+                    <div class="field">
+                        <label for="{{ p }}state">Work status</label>
+                        <select id="{{ p }}state" name="{{ p }}state">
+                            {% for status in work_statuses %}
+                                <option value="{{ status }}" {% if item.state == status %}selected{% endif %}>{{ status | label }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="hint">Used for work activities only.</p>
+                    </div>
+                    <div class="field">
+                        <label for="{{ p }}minutes">Minutes spent (optional)</label>
+                        <input id="{{ p }}minutes" name="{{ p }}minutes" type="number" min="0" step="1" value="{{ item.minutes }}">
+                    </div>
+                </div>
+
+                {% if item.updates %}
+                    {% for goal_id in item.goal_ids %}
+                        <input type="hidden" name="{{ p }}goal" value="{{ goal_id }}">
+                    {% endfor %}
+                    <p class="hint">
+                        Linked goals:
+                        {% for goal_id in item.goal_ids %}{{ goal_titles.get(goal_id, "Goal unavailable") }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}
+                    </p>
+                {% endif %}
+
+                {% if goals %}
+                    <div class="checks goal-links">
+                        <p class="label-text">
+                            {% if item.updates %}Milestones of the linked goals{% else %}Link goals and, for work, milestones{% endif %}
+                        </p>
+                        {% for goal in goals %}
+                            {% if not item.updates or goal["id"] in item.goal_ids %}
+                                <div class="goal-choice">
+                                    {% if not item.updates %}
+                                        <label>
+                                            <input type="checkbox" name="{{ p }}goal" value="{{ goal['id'] }}" {% if goal["id"] in item.goal_ids %}checked{% endif %}>
+                                            <span>{{ goal["title"] }}</span>
+                                        </label>
+                                    {% endif %}
+                                    {% for milestone in goal["milestones"] if milestone["is_included"] %}
+                                        <label class="nested">
+                                            <input type="checkbox" name="{{ p }}milestone" value="{{ milestone['id'] }}" {% if milestone["id"] in item.milestone_ids %}checked{% endif %}>
+                                            <span>Milestone: {{ milestone["description"] }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="field">
+                        <label for="{{ p }}milestone_state">Selected milestones become</label>
+                        <select id="{{ p }}milestone_state" name="{{ p }}milestone_state">
+                            <option value="done" {% if item.milestone_state == "done" %}selected{% endif %}>Done</option>
+                            <option value="not_done" {% if item.milestone_state == "not_done" %}selected{% endif %}>Not done</option>
+                        </select>
+                        <p class="hint">
+                            Only completed work can mark a milestone done; otherwise
+                            selected milestones are recorded as not done.
+                        </p>
+                    </div>
+                {% else %}
+                    <p class="hint">No goals accept progress on this date, so this item will be unlinked.</p>
+                {% endif %}
+            </fieldset>
+        {% endfor %}
+
+        <div class="actions">
+            <button type="submit" name="action" value="review">Review entry →</button>
+            {% if source != "llm_reviewed" and not (items | selectattr("updates") | list) %}
+                <button type="submit" name="action" value="add_item" class="secondary" formnovalidate>
+                    Add another item
+                </button>
+            {% endif %}
+            <a href="/progress">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}{{ period["kind"] | label }} Report | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/reports">← Reports</a>
+    <h1>{{ period["kind"] | label }} report</h1>
+    <p class="intro">{{ period["start_date"] }} to {{ period["end_date"] }} · {{ period["timezone"] }}</p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+    {% if warning %}
+        <p class="warning" role="status">{{ warning }}</p>
+    {% endif %}
+
+    {% if reports %}
+        <section class="card">
+            <h2>Saved revisions</h2>
+            <ul class="plain">
+                {% for report in reports %}
+                    <li>
+                        <a href="/reports/{{ report['id'] }}">Revision {{ report["revision"] }}</a>
+                        <span class="muted">· generated {{ report["generated_at"] | when }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% endif %}
+
+    <form class="panel" action="/reports/periods/{{ period['id'] }}/generate" method="post">
+        <h2>Generate a {% if reports %}new revision{% else %}report{% endif %}</h2>
+        <p class="hint">
+            The report saves the facts for this period as they are now.
+            {% if reports %}Earlier revisions stay unchanged.{% endif %}
+        </p>
+        <input type="hidden" name="request_id" value="{{ request_id }}">
+
+        <div class="checks">
+            <label>
+                <input type="checkbox" name="include_ai">
+                <span>
+                    Include AI suggestions from the local model.
+                    You will preview them before anything is saved.
+                </span>
+            </label>
+        </div>
+
+        <div class="actions">
+            <button type="submit" data-busy="Generating…">Generate report</button>
+            <a href="/reports">Cancel</a>
+        </div>
+    </form>
+{% endblock %}

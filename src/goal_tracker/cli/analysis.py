@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from rich.console import Console
@@ -8,6 +8,7 @@ from goal_tracker.analysis.service import AnalysisService
 from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError, DomainValidationError
 from goal_tracker.domain.models import PeriodSpec
+from goal_tracker.domain.periods import current_period_start
 
 from goal_tracker.mcp.services import get_analysis_service
 
@@ -19,10 +20,7 @@ def _today_in_timezone(timezone: str) -> date:
 
 def _current_period_start(kind: PeriodKind, today: date) -> date:
     """Find the start date of the current week or month."""
-    if kind == PeriodKind.WEEKLY:
-        return today - timedelta(days=today.weekday())
-
-    return today.replace(day=1)
+    return current_period_start(kind, today)
 
 
 def _ask_period_start(

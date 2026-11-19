@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_items %}
+
+{% block title %}Entry {{ entry["activity_date"] }} | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <a href="/progress">← Daily progress</a>
+    <h1>Entry for {{ entry["activity_date"] }}</h1>
+
+    {% if saved %}
+        <p class="notice" role="status">Progress saved.</p>
+    {% endif %}
+
+    <section class="card">
+        <dl>
+            <dt>Source</dt>
+            <dd>{{ entry.get("source", "manual") | label }}</dd>
+            {% if entry.get("created_at") %}
+                <dt>Recorded at</dt>
+                <dd>{{ entry["created_at"] | when }}</dd>
+            {% endif %}
+            <dt>Journal</dt>
+            <dd>{{ entry["raw_text"] }}</dd>
+        </dl>
+
+        <h2 class="section-title">Items</h2>
+        {{ entry_items(entry["activities"], goal_titles, milestone_names) }}
+    </section>
+
+    <div class="actions">
+        <a class="button" href="/progress/new">Record another entry</a>
+        <a href="/progress/pending">Pending work</a>
+    </div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_items %}
+
+{% block title %}Review Progress | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <a href="/progress">← Daily progress</a>
+    <h1>Review your entry</h1>
+    <p class="intro">
+        This is exactly what will be saved. Confirm to record it, or go back
+        to make changes.
+    </p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    {% if duplicates %}
+        <section class="warning" role="alert">
+            <strong>Matching entries already exist on this date.</strong>
+            {% for existing in duplicates %}
+                <p>
+                    <span class="muted">Recorded at {{ existing["created_at"] | when }}</span><br>
+                    {{ existing["raw_text"] | truncate(200) }}
+                </p>
+            {% endfor %}
+            <p>Only save again if this is genuinely a separate entry.</p>
+        </section>
+    {% endif %}
+
+    <section class="card">
+        <dl>
+            <dt>Activity date</dt>
+            <dd>{{ draft["activity_date"] }}</dd>
+            <dt>Source</dt>
+            <dd>{{ draft["source"] | label }}</dd>
+            <dt>Journal</dt>
+            <dd>{{ draft["raw_text"] }}</dd>
+        </dl>
+
+        <h2 class="section-title">Items</h2>
+        {{ entry_items(draft["activities"], goal_titles, milestone_names) }}
+
+        <div class="actions">
+            <form action="/progress/save" method="post">
+                <input type="hidden" name="draft_json" value="{{ draft_json }}">
+                {% if duplicates %}
+                    <input type="hidden" name="allow_duplicate_entry" value="1">
+                    <button type="submit">Save as a separate entry</button>
+                {% else %}
+                    <button type="submit">Confirm and save</button>
+                {% endif %}
+            </form>
+            <form action="/progress/edit" method="post">
+                <input type="hidden" name="draft_json" value="{{ draft_json }}">
+                <button type="submit" class="secondary">Edit items</button>
+            </form>
+            <a href="/progress">Cancel</a>
+        </div>
+    </section>
+{% endblock %}

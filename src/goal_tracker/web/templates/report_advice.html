@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import advice_sections %}
+
+{% block title %}Preview AI Suggestions | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block content %}
+    <a href="/reports/periods/{{ period['id'] }}">← {{ period["kind"] | label }} report</a>
+    <h1>Preview AI suggestions</h1>
+    <p class="intro">
+        {{ period["start_date"] }} to {{ period["end_date"] }}.
+        Based on {{ evidence_count }} evidence records.
+        Suggestions are not saved unless you include them.
+    </p>
+
+    {% if omitted_count %}
+        <p class="warning">
+            {{ omitted_count }} records were omitted from the model context to
+            limit its size. The factual report still includes its full snapshot.
+        </p>
+    {% endif %}
+
+    <section class="card">
+        {{ advice_sections(sections) }}
+    </section>
+
+    <div class="actions">
+        <form action="/reports/periods/{{ period['id'] }}/save" method="post">
+            <input type="hidden" name="request_id" value="{{ advice_request_id }}">
+            <input type="hidden" name="advisory_json" value="{{ advisory_json }}">
+            <input type="hidden" name="evidence_hash" value="{{ evidence_hash }}">
+            <input type="hidden" name="provenance_json" value="{{ provenance_json }}">
+            <button type="submit">Save report with these suggestions</button>
+        </form>
+        <form action="/reports/periods/{{ period['id'] }}/save" method="post">
+            <input type="hidden" name="request_id" value="{{ factual_request_id }}">
+            <button type="submit" class="secondary">Save factual report only</button>
+        </form>
+        <a href="/reports/periods/{{ period['id'] }}">Cancel</a>
+    </div>
+{% endblock %}

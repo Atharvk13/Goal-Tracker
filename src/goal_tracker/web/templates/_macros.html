@@ -1,0 +1,106 @@
+{# Shared fragments used by several pages. #}
+
+{% macro errors_box(errors) %}
+    {% if errors %}
+        <section class="errors" role="alert">
+            <strong>Please check the following:</strong>
+            <ul>
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% endif %}
+{% endmacro %}
+
+{% macro status_badge(value) %}
+    <span class="badge badge-{{ value }}">{{ value | label }}</span>
+{% endmacro %}
+
+{% macro progress_bar(value) %}
+    {% if value is not none %}
+        <div class="bar" role="img" aria-label="{{ value | percent }}">
+            <span style="width: {{ [[value, 0] | max, 100] | min }}%"></span>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro advice_sections(sections) %}
+    {% for section in sections %}
+        <h3>{{ section.title }}</h3>
+        {% if section["items"] %}
+            <ul class="advice">
+                {% for item in section["items"] %}
+                    <li>
+                        {{ item.text }}
+                        <details>
+                            <summary>Evidence ({{ item.sources | length }})</summary>
+                            <ul>
+                                {% for evidence_id, label in item.sources %}
+                                    <li><code>{{ evidence_id }}</code> — {{ label }}</li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="muted">No suggestions.</p>
+        {% endif %}
+    {% endfor %}
+{% endmacro %}
+
+{% macro entry_items(activities, goal_titles, milestone_names) %}
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th class="num">Minutes</th>
+                    <th>Goals</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                    <tr>
+                        <td>{{ activity["kind"] | label }}</td>
+                        <td>
+                            {{ activity["description"] }}
+                            {% if activity.get("updates_activity_id") %}
+                                <span class="muted">(status update)</span>
+                            {% endif %}
+                            {% if activity.get("evidence_quote") %}
+                                <div class="quote">“{{ activity["evidence_quote"] }}”</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if activity["state"] == "not_applicable" %}—{% else %}{{ status_badge(activity["state"]) }}{% endif %}
+                        </td>
+                        <td class="num">
+                            {{ activity["minutes"] if activity["minutes"] is not none else "—" }}
+                        </td>
+                        <td>
+                            {% for goal_id in activity["goal_ids"] %}
+                                <div>{{ goal_titles.get(goal_id, "Goal unavailable") }}</div>
+                            {% else %}
+                                <span class="muted">Unlinked</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% for change in activity["milestone_changes"] %}
+                        <tr class="subrow">
+                            <td></td>
+                            <td colspan="4">
+                                Milestone:
+                                {{ milestone_names.get(change["milestone_id"], "Milestone unavailable") }}
+                                → {{ status_badge(change["state"]) }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endmacro %}

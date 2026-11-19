@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% from "_macros.html" import advice_sections, progress_bar, status_badge %}
+
+{% block title %}{{ facts["period"]["kind"] | label }} Report {{ facts["period"]["start_date"] }} | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% macro items_card(title, items, note=None) %}
+    <section class="card">
+        <h2>{{ title }}</h2>
+        {% if items %}
+            <ul class="plain">
+                {% for item in items %}
+                    {% if item is string %}
+                        <li>{{ item }}</li>
+                    {% else %}
+                        <li>
+                            {{ item.get("description", "") }}
+                            {% set details = [] %}
+                            {% if item.get("state") and item["state"] != "not_applicable" %}{% set _ = details.append(item["state"] | label) %}{% endif %}
+                            {% if item.get("minutes") is not none %}{% set _ = details.append(item["minutes"] ~ " minutes") %}{% endif %}
+                            {% if details %}<span class="muted">({{ details | join("; ") }})</span>{% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="muted">None recorded.</p>
+        {% endif %}
+        {% if note %}<p class="hint">{{ note }}</p>{% endif %}
+    </section>
+{% endmacro %}
+
+{% block content %}
+    {% set period = facts["period"] %}
+    <a href="/reports">← Reports</a>
+
+    <header class="page-header">
+        <div>
+            <h1>{{ period["kind"] | label }} progress report</h1>
+            <p class="intro">
+                {{ period["start_date"] }} to {{ period["end_date"] }} ·
+                Revision {{ report["revision"] }} · Cutoff {{ report["cutoff_date"] }}
+            </p>
+        </div>
+        <div class="actions tight">
+            <a class="button" href="/reports/{{ report['id'] }}/pdf">Download PDF</a>
+            <a class="button secondary" href="/reports/periods/{{ period['id'] }}">New revision</a>
+        </div>
+    </header>
+
+    {% if saved %}
+        <p class="notice" role="status">Report saved.</p>
+    {% endif %}
+
+    <div class="stats">
+        <div class="stat">
+            <span class="value">{{ facts["revised_completion"] | percent }}</span>
+            <span class="label">Revised-plan completion</span>
+            {{ progress_bar(facts["revised_completion"]) }}
+        </div>
+        <div class="stat">
+            <span class="value">{{ facts["original_completion"] | percent }}</span>
+            <span class="label">Original-plan completion</span>
+            {{ progress_bar(facts["original_completion"]) }}
+        </div>
+        <div class="stat">
+            <span class="value">{{ facts["recorded_days"] }} / {{ facts["elapsed_days"] }}</span>
+            <span class="label">Days with entries ({{ facts["logging_consistency"] | percent }})</span>
+        </div>
+        <div class="stat">
+            <span class="value">{{ facts["recorded_minutes"] if facts["recorded_minutes"] is not none else "—" }}</span>
+            <span class="label">Minutes recorded ({{ facts["items_without_time"] }} items without time)</span>
+        </div>
+        <div class="stat">
+            <span class="value">{{ facts["completed_due"] }} / {{ facts["planned_due"] }}</span>
+            <span class="label">Milestones due by cutoff completed</span>
+        </div>
+    </div>
+    <p class="hint">
+        Overall completion gives each scored goal equal weight.
+        Days without entries represent missing information.
+    </p>
+
+    <section class="card">
+        <h2>Goals and milestone results</h2>
+        {% for goal in facts["goals"] %}
+            <article class="goal-result">
+                <h3>{{ goal["title"] }} {{ status_badge(goal["lifecycle_status"]) }}</h3>
+                <p class="metadata">
+                    Original {{ goal["original_completion"] | percent }} ·
+                    Revised {{ goal["revised_completion"] | percent }} ·
+                    {% if goal["revised_scored"] %}{{ goal["revised_completed"] }}/{{ goal["revised_total"] }} milestones{% else %}Not scored{% endif %} ·
+                    Deadline {{ goal["deadline"] }}
+                    {% if goal["overdue"] %}· <span class="badge badge-overdue">Incomplete after deadline</span>{% endif %}
+                </p>
+                {% if goal["is_original_plan"] %}
+                    <p class="metadata">Original title: {{ goal["original_title"] }} · Original expected outcome: {{ goal["original_expected_outcome"] or "Not provided" }}</p>
+                {% else %}
+                    <p class="metadata">Added after initial planning.</p>
+                {% endif %}
+                <p class="metadata">Current expected outcome: {{ goal["expected_outcome"] or "Not provided" }}</p>
+                <ul class="milestone-list">
+                    {% for milestone in goal["milestones"] %}
+                        <li class="{{ 'done' if milestone['completed'] else '' }}">
+                            <span aria-hidden="true">{{ "✓" if milestone["completed"] else "○" }}</span>
+                            {{ milestone["description"] }}
+                            {% if not milestone["is_baseline"] %}<span class="badge">added</span>{% endif %}
+                            {% if not milestone["is_included"] %}<span class="badge">removed</span>{% endif %}
+                            {% if milestone["overdue"] %}<span class="badge badge-overdue">overdue</span>{% endif %}
+                            {% if milestone["is_baseline"] and milestone["creation_description"] != milestone["description"] %}
+                                <div class="muted">Original description: {{ milestone["creation_description"] }}</div>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+                <p class="hint">Scope changes: {{ goal["added_milestones"] }} added, {{ goal["removed_milestones"] }} removed.</p>
+            </article>
+        {% else %}
+            <p class="muted">No goals were effective during this period.</p>
+        {% endfor %}
+    </section>
+
+    <div class="grid-2">
+        {{ items_card("Completed activities", facts["completed_activities"]) }}
+        {{ items_card("Completed milestones as of cutoff", completed_milestones) }}
+        {{ items_card("Achievements", facts["achievements"]) }}
+        {{ items_card("Learnings", facts["learnings"]) }}
+        {{ items_card("Challenges", facts["challenges"]) }}
+        {{ items_card("Observations", facts["observations"]) }}
+    </div>
+    {{ items_card(
+        "Open work as of cutoff",
+        facts["pending_activities"],
+        "Open work may include carryover from earlier periods and goals belonging to other periods."
+    ) }}
+
+    {% if facts["completion_trend"] %}
+        <section class="card">
+            <h2>Daily completion trend</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Revised completion</th><th class="num">Entries</th></tr></thead>
+                    <tbody>
+                        {% for day in facts["completion_trend"] %}
+                            <tr>
+                                <td>{{ day["date"] }}</td>
+                                <td><div class="bar-row">{{ progress_bar(day["completion"]) }}<span>{{ day["completion"] | percent }}</span></div></td>
+                                <td class="num">{{ day["entries"] }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% endif %}
+
+    <section class="card">
+        <h2>AI recommendations</h2>
+        {% if advice %}
+            {% if report["model_provenance"] and report["model_provenance"].get("model") %}
+                <p class="metadata">Model: {{ report["model_provenance"]["model"] }}</p>
+            {% endif %}
+            <p class="hint">These are suggestions. Recommended goals have not been created automatically.</p>
+            {{ advice_sections(advice) }}
+            {% if report["advisory"].get("omitted_count") %}
+                <p class="hint">
+                    Advice used a limited context: {{ report["advisory"]["omitted_count"] }}
+                    records were omitted from the model input.
+                </p>
+            {% endif %}
+        {% else %}
+            <p class="muted">AI recommendations are not included in this revision.</p>
+        {% endif %}
+    </section>
+
+    <p class="hint">
+        Generated {{ report["generated_at"] | when }}. This is a saved snapshot;
+        later corrections appear in a newly generated report revision.
+    </p>
+{% endblock %}

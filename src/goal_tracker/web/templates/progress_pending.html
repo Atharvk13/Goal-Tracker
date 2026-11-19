@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+
+{% block title %}Pending Work | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% block content %}
+    <a href="/progress">← Daily progress</a>
+    <h1>Pending work</h1>
+    <p class="intro">
+        Work recorded as pending or in progress, with its latest state as of
+        the selected date. Update it when you make progress.
+    </p>
+
+    <form class="filters" action="/progress/pending" method="get">
+        <div class="field">
+            <label for="on">As of</label>
+            <input id="on" name="on" type="date" max="{{ today }}" value="{{ on }}">
+        </div>
+        <button type="submit" class="secondary">Show</button>
+    </form>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card">
+        {% if pending %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>First recorded</th>
+                            <th>Goals</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in pending %}
+                            <tr>
+                                <td>{{ activity["description"] }}</td>
+                                <td>{{ status_badge(activity["state"]) }}</td>
+                                <td>{{ activity["activity_date"] }}</td>
+                                <td>
+                                    {% for goal_id in activity["goal_ids"] %}
+                                        <div>{{ goal_titles.get(goal_id, "Goal unavailable") }}</div>
+                                    {% else %}
+                                        <span class="muted">Unlinked</span>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if activity["id"] in updatable_ids %}
+                                        <a href="/progress/pending/{{ activity['id'] }}/update?on={{ on }}">Update →</a>
+                                    {% else %}
+                                        <span class="muted" title="A linked goal does not accept progress on this date.">Not updatable</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">No pending or in-progress work.</p>
+        {% endif %}
+    </section>
+{% endblock %}

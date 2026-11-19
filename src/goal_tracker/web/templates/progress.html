@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Daily Progress | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% block content %}
+    <header class="page-header">
+        <div>
+            <h1>Daily progress</h1>
+            <p class="intro">Record what you worked on and review earlier entries.</p>
+        </div>
+        <div class="actions tight">
+            <a class="button" href="/progress/new">Record an entry</a>
+            <a class="button secondary" href="/progress/pending">
+                Pending work ({{ pending_count }})
+            </a>
+        </div>
+    </header>
+
+    <form class="filters" action="/progress" method="get">
+        <div class="field">
+            <label for="start">From</label>
+            <input id="start" name="start" type="date" value="{{ start }}">
+        </div>
+        <div class="field">
+            <label for="end">To</label>
+            <input id="end" name="end" type="date" value="{{ end }}">
+        </div>
+        <button type="submit" class="secondary">Show entries</button>
+    </form>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card" aria-labelledby="entries-heading">
+        <h2 id="entries-heading">Entries from {{ start }} to {{ end }}</h2>
+
+        {% if entries %}
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th class="num">Items</th>
+                            <th>Journal</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in entries %}
+                            <tr>
+                                <td><a href="/progress/entries/{{ entry['id'] }}">{{ entry["activity_date"] }}</a></td>
+                                <td class="num">{{ entry["activities"] | length }}</td>
+                                <td>{{ entry["raw_text"] | truncate(110) }}</td>
+                                <td>{{ entry.get("source", "manual") | label }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="muted">No entries in this date range.</p>
+        {% endif %}
+
+        <nav class="pagination" aria-label="Entry pages">
+            {% if page > 1 %}
+                <a href="/progress?start={{ start }}&end={{ end }}&page={{ page - 1 }}">← Previous</a>
+            {% endif %}
+            <span>Page {{ page }}</span>
+            {% if has_next %}
+                <a href="/progress?start={{ start }}&end={{ end }}&page={{ page + 1 }}">Next →</a>
+            {% endif %}
+        </nav>
+    </section>
+{% endblock %}

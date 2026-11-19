@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ goal["title"] }} | Goal Tracker{% endblock %}
+
+{% block main_class %}medium{% endblock %}
+
+{% block styles %}
+    <style>
+        .milestones {
+            padding-left: 24px;
+        }
+
+        .milestones li {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .milestones li:last-child {
+            border-bottom: 0;
+        }
+
+        .milestones .description {
+            margin: 0 0 8px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <a href="/goals">← Your goals</a>
+
+    <header>
+        <h1>{{ goal["title"] }}</h1>
+        <span class="badge badge-{{ goal['lifecycle_status'] }}">{{ goal["lifecycle_status"] | label }}</span>
+            </header>
+
+    <p>
+        <a href="/goals/{{ goal['id'] }}/edit">Edit goal →</a>
+    </p>
+
+    {% if goal["lifecycle_status"] != "archived" %}
+        <p>
+            <a href="/goals/{{ goal['id'] }}/lifecycle">
+                {% if goal["lifecycle_status"] == "active" %}
+                    Cancel or archive goal →
+                {% else %}
+                    Archive goal →
+                {% endif %}
+            </a>
+        </p>
+    {% endif %}
+
+        {% if not goal["period"]["planning_closed_at"] %}
+        <p>
+            <a href="/goals/{{ goal['id'] }}/plan">
+                Review initial-plan finalization →
+            </a>
+        </p>
+    {% endif %}
+        <h2 id="plan-heading">Goal plan</h2>
+
+        <dl>
+            <dt>Period</dt>
+            <dd>{{ goal["period"]["kind"] | title }}: {{ goal["period"]["start_date"] }} to {{ goal["period"]["end_date"] }}</dd>
+
+            <dt>Timezone</dt>
+            <dd>{{ goal["period"]["timezone"] }}</dd>
+
+            <dt>Deadline</dt>
+            <dd>{{ goal["target_date"] or goal["period"]["end_date"] }}</dd>
+
+            {% if goal["description"] %}
+                <dt>Description</dt>
+                <dd>{{ goal["description"] }}</dd>
+            {% endif %}
+
+            {% if goal["expected_outcome"] %}
+                <dt>Expected outcome</dt>
+                <dd>{{ goal["expected_outcome"] }}</dd>
+            {% endif %}
+
+            <dt>Current revision</dt>
+            <dd>{{ goal["revision"] }}</dd>
+
+            <dt>Initial planning</dt>
+            <dd>{% if goal["period"]["planning_closed_at"] %}Finalized{% else %}Open{% endif %}</dd>
+
+            {% if goal["period"]["planning_closed_at"] %}
+                <dt>Plan membership</dt>
+                <dd>{% if goal["is_original_plan"] %}Original plan{% else %}Added after initial planning{% endif %}</dd>
+            {% endif %}
+        </dl>
+    </section>
+
+    <section class="card" aria-labelledby="milestones-heading">
+        <h2 id="milestones-heading">Milestone scope</h2>
+        <p class="metadata">
+            Inclusion shows whether a milestone belongs to the current
+            plan. Completion is recorded separately through daily progress.
+        </p>
+
+        <ol class="milestones">
+            {% for milestone in goal["milestones"] %}
+                <li>
+                    <p class="description">{{ milestone["description"] }}</p>
+
+                    <span class="status">
+                        {% if milestone["is_included"] %}
+                            Included in current plan
+                        {% else %}
+                            Removed from current plan
+                        {% endif %}
+                    </span>
+
+                    <p class="metadata">
+                        Due: {{ milestone["due_date"] or goal["target_date"] or goal["period"]["end_date"] }}
+                    </p>
+
+                    <p class="metadata">
+                        {% if milestone["is_baseline"] %}
+                            Creation baseline
+                        {% else %}
+                            Added after goal creation
+                        {% endif %}
+                        · Revision {{ milestone["revision"] }}
+                    </p>
+                </li>
+            {% else %}
+                <li>No milestones found.</li>
+            {% endfor %}
+        </ol>
+    </section>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Review Status Change | Goal Tracker{% endblock %}
+
+{% block content %}
+    <a href="/goals/{{ draft.goal_id }}">← Goal details</a>
+
+    <h1>Review status change</h1>
+    <p class="intro">
+        Check the change before confirming.
+        Goal history and milestones will remain preserved.
+    </p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card" aria-labelledby="change-heading">
+        <h2 id="change-heading">{{ goal["title"] }}</h2>
+
+        <dl>
+            <dt>Current status</dt>
+            <dd>{{ goal["lifecycle_status"] | title }}</dd>
+
+            <dt>Requested status</dt>
+            <dd>{{ target_status | title }}</dd>
+
+            <dt>Reason</dt>
+            <dd>{{ draft.reason }}</dd>
+
+            <dt>Effective date</dt>
+            <dd>{{ draft.effective_date or "Normal change date" }}</dd>
+
+            <dt>Expected revision</dt>
+            <dd>{{ draft.expected_revision }}</dd>
+        </dl>
+
+        {% if draft.action == "archive" %}
+            <p class="intro">
+                Once archived, this goal cannot change status again.
+            </p>
+        {% endif %}
+
+        <div class="actions">
+            {% if not error %}
+                <form
+                    action="/goals/{{ draft.goal_id }}/lifecycle/save"
+                    method="post"
+                >
+                    <input
+                        type="hidden"
+                        name="draft_json"
+                        value="{{ draft_json }}"
+                    >
+                    <button type="submit">
+                        Confirm {{ draft.action | title }}
+                    </button>
+                </form>
+            {% endif %}
+
+            <a href="/goals/{{ draft.goal_id }}/lifecycle">
+                Reopen status form
+            </a>
+            <a href="/goals/{{ draft.goal_id }}">Keep current status</a>
+        </div>
+    </section>
+{% endblock %}

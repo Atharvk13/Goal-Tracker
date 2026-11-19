@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Finalize Initial Plan | Goal Tracker{% endblock %}
+
+{% block styles %}
+    <style>
+        dd {
+            margin: 5px 0 0;
+            white-space: normal;
+            line-height: 1.6;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <a href="/goals/{{ goal['id'] }}">← Goal details</a>
+
+    <h1>Finalize initial plan</h1>
+    <p class="intro">
+        This action applies to the entire period, including its other goals.
+    </p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card" aria-labelledby="period-heading">
+        <h2 id="period-heading">Review the period</h2>
+
+        <dl>
+            <dt>Period</dt>
+            <dd>{{ goal["period"]["kind"] | title }}:
+                {{ goal["period"]["start_date"] }} to
+                {{ goal["period"]["end_date"] }}</dd>
+
+            <dt>Timezone</dt>
+            <dd>{{ goal["period"]["timezone"] }}</dd>
+        </dl>
+
+        <p class="intro">
+            Finalizing identifies the current active goals as your
+            initial period plan. Goals added afterward will be labelled
+            additions. You can still edit goals and record progress.
+        </p>
+
+        <p class="intro">
+            Review all goals for this period before confirming.
+            The current workflow does not provide an undo action
+            for planning finalization.
+        </p>
+
+        <div class="actions">
+            {% if not error %}
+                <form
+                    action="/goals/{{ goal['id'] }}/plan/save"
+                    method="post"
+                >
+                    <input
+                        type="hidden"
+                        name="draft_json"
+                        value="{{ draft_json }}"
+                    >
+                    <button type="submit">
+                        Confirm initial-plan finalization
+                    </button>
+                </form>
+            {% endif %}
+
+            <a href="/goals">Review your goals</a>
+            <a href="/goals/{{ goal['id'] }}">Back to goal</a>
+        </div>
+    </section>
+{% endblock %}
