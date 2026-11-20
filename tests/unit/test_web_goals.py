@@ -37,6 +37,7 @@ def web_environment(tmp_path, monkeypatch):
         settings=Settings(
             llm_model="test-model",
             timezone="Asia/Kolkata",
+            agent_schedule=False,
         ),
         paths=paths,
         logger=Mock(),

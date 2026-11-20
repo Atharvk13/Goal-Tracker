@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
+    <script>
+        // Apply the saved light/dark choice before the page paints (no flash).
+        try {
+            const saved = localStorage.getItem("gt-theme");
+            if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+        } catch {}
+    </script>
     <title>{% block title %}Goal Tracker{% endblock %}</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%232455bd'/%3E%3Ccircle cx='12' cy='12' r='6' fill='white'/%3E%3Ccircle cx='12' cy='12' r='2.5' fill='%232455bd'/%3E%3C/svg%3E">
     <style>
@@ -34,8 +41,12 @@
             --shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 6px 20px rgba(23, 32, 51, 0.05);
         }
 
+        /* Dark theme: follows Windows unless the toggle chose light or dark. */
+        :root[data-theme="light"] { color-scheme: light; }
+        :root[data-theme="dark"] { color-scheme: dark; }
+
         @media (prefers-color-scheme: dark) {
-            :root {
+            :root:not([data-theme="light"]) {
                 --bg: #0f1420;
                 --surface: #171d2b;
                 --surface-2: #1d2433;
@@ -60,6 +71,52 @@
                 --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
             }
         }
+
+        :root[data-theme="dark"] {
+            --bg: #0f1420;
+            --surface: #171d2b;
+            --surface-2: #1d2433;
+            --text: #e6eaf2;
+            --muted: #9ca8bc;
+            --border: #2a3346;
+            --border-soft: #232b3c;
+            --input-border: #3d4862;
+            --accent: #7ea4ff;
+            --accent-hover: #a0bcff;
+            --accent-soft: #1c2947;
+            --on-accent: #0f1420;
+            --accent-2: #b58cff;
+            --glow: rgba(126, 164, 255, 0.10);
+
+            --ok-bg: #12301f;    --ok-fg: #8fe0ad;
+            --info-bg: #15243d;  --info-fg: #aac9f5;  --info-border: #2d4a75;
+            --warn-bg: #2d2510;  --warn-fg: #f0d48a;  --warn-border: #6b5620;
+            --err-bg: #33171a;   --err-fg: #f3a7a7;   --err-border: #6e2b30;
+            --neutral-bg: #232b3c; --neutral-fg: #b8c2d4;
+
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Light/dark toggle in the top right corner */
+        .theme-toggle {
+            display: inline-grid;
+            place-items: center;
+            width: 40px;
+            height: 40px;
+            margin-left: 8px;
+            padding: 0;
+            border-radius: 50%;
+            background: var(--surface-2);
+            color: var(--text);
+            box-shadow: inset 0 0 0 1px var(--border);
+        }
+        .theme-toggle:hover { background: var(--accent-soft); color: var(--accent); }
+        .theme-toggle:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--accent); }
+        .theme-toggle svg { grid-area: 1 / 1; transition: transform 0.45s cubic-bezier(.2,.8,.2,1), opacity 0.3s ease; }
+        .theme-toggle .moon { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+        .theme-toggle.is-dark .sun { opacity: 0; transform: rotate(90deg) scale(0.5); }
+        .theme-toggle.is-dark .moon { opacity: 1; transform: none; }
+        html.theme-switching, html.theme-switching * { transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease !important; }
 
         /* ---------- Base ---------- */
         * { box-sizing: border-box; }
@@ -526,7 +583,7 @@
             padding: 9px 18px;
             border-radius: 999px;
             color: #fff;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            background: linear-gradient(135deg, #2455bd, #7c3aed);
             background-size: 200% 200%;
             box-shadow: 0 6px 18px rgba(80, 70, 220, 0.35);
             overflow: hidden;
@@ -536,7 +593,7 @@
         }
         .site-header a.mail-cta:hover {
             color: #fff;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            background: linear-gradient(135deg, #2455bd, #7c3aed);
             background-size: 200% 200%;
             box-shadow: 0 10px 26px rgba(80, 70, 220, 0.5);
         }
@@ -607,8 +664,11 @@
 
         .bar span { animation: grow 1s cubic-bezier(.2,.8,.2,1) both; transform-origin: left; }
 
-        /* Cursor: soft glow behind the page and a ring that trails the pointer */
-        .cursor-glow, .cursor-ring, .cursor-dot {
+        /* Cursor: futuristic HUD. A neon light trail follows the pointer,
+           corner brackets track it and lock onto whatever you hover, and a
+           clicked spot sends out a hexagon shockwave. The normal cursor stays. */
+        :root { --hud: #00d5ff; --hud-2: #a855f7; }
+        .cursor-glow, .cursor-trail, .cursor-hud {
             position: fixed;
             top: 0; left: 0;
             pointer-events: none;
@@ -622,29 +682,61 @@
             border-radius: 50%;
             background: radial-gradient(circle, var(--glow), transparent 65%);
         }
-        .cursor-ring {
+        .cursor-trail { z-index: 99; width: 100vw; height: 100vh; }
+        .cursor-hud {
             z-index: 100;
-            width: 34px; height: 34px;
-            margin: -17px 0 0 -17px;
-            border: 2px solid var(--accent);
-            border-radius: 50%;
-            transition: opacity 0.3s ease, width 0.25s ease, height 0.25s ease, margin 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+            width: 28px; height: 28px;
+            transition: opacity 0.3s ease;
+            will-change: transform, width, height;
         }
-        .cursor-dot {
-            z-index: 101;
-            width: 6px; height: 6px;
-            margin: -3px 0 0 -3px;
-            border-radius: 50%;
-            background: var(--accent-2);
+        .cursor-hud i {
+            position: absolute;
+            width: 9px; height: 9px;
+            border: 2px solid var(--hud);
+            filter: drop-shadow(0 0 4px var(--hud));
+            transition: border-color 0.2s ease, width 0.2s ease, height 0.2s ease;
         }
-        body.cursor-on .cursor-glow, body.cursor-on .cursor-ring, body.cursor-on .cursor-dot { opacity: 1; }
-        body.cursor-hover .cursor-ring {
-            width: 54px; height: 54px;
-            margin: -27px 0 0 -27px;
-            border-color: var(--accent-2);
-            background: var(--glow);
+        .cursor-hud i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+        .cursor-hud i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+        .cursor-hud i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+        .cursor-hud i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+        .cursor-hud b {
+            position: absolute;
+            left: 50%; top: 50%;
+            width: 4px; height: 4px;
+            margin: -2px 0 0 -2px;
+            background: var(--hud);
+            box-shadow: 0 0 8px var(--hud);
+            transform: rotate(45deg);
+            transition: opacity 0.2s ease;
         }
-        body.cursor-down .cursor-ring { width: 24px; height: 24px; margin: -12px 0 0 -12px; }
+        .cursor-hud .scan {
+            position: absolute;
+            left: 3px; right: 3px; top: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--hud-2), transparent);
+            opacity: 0;
+        }
+        .cursor-hud .label {
+            position: absolute;
+            left: 0; top: -18px;
+            font: 700 9px/1 ui-monospace, Consolas, monospace;
+            letter-spacing: 0.12em;
+            color: var(--hud);
+            text-shadow: 0 0 6px var(--hud);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        body.cursor-on .cursor-glow, body.cursor-on .cursor-trail, body.cursor-on .cursor-hud { opacity: 1; }
+        body.cursor-hover .cursor-hud i { border-color: var(--hud-2); filter: drop-shadow(0 0 5px var(--hud-2)); width: 12px; height: 12px; }
+        body.cursor-hover .cursor-hud b { opacity: 0; }
+        body.cursor-hover .cursor-hud .scan { opacity: 0.9; animation: hud-scan 1.4s linear infinite; }
+        body.cursor-hover .cursor-hud .label { opacity: 1; }
+        body.cursor-down .cursor-hud i { width: 6px; height: 6px; }
+        body:not(.cursor-hover) .cursor-hud { animation: hud-breathe 2.4s ease-in-out infinite; }
+        @keyframes hud-scan { 0% { top: 3px; } 50% { top: calc(100% - 5px); } 100% { top: 3px; } }
+        @keyframes hud-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 
         /* Footer */
         .site-footer { text-align: center; padding-top: 8px; }
@@ -673,12 +765,12 @@
 
         /* Touch screens get no pointer effects; respect reduced motion. */
         @media (hover: none), (pointer: coarse) {
-            .cursor-glow, .cursor-ring, .cursor-dot { display: none; }
+            .cursor-glow, .cursor-trail, .cursor-hud { display: none; }
         }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation: none !important; transition: none !important; }
             .reveal { opacity: 1; transform: none; }
-            .cursor-ring, .cursor-dot { display: none; }
+            .cursor-trail, .cursor-hud { display: none; }
         }
         @media (max-width: 560px) {
             .site-header a.mail-cta { margin-left: 0; }
@@ -693,8 +785,8 @@
 </head>
 <body>
     <div class="cursor-glow" aria-hidden="true"></div>
-    <div class="cursor-ring" aria-hidden="true"></div>
-    <div class="cursor-dot" aria-hidden="true"></div>
+    <canvas class="cursor-trail" aria-hidden="true"></canvas>
+    <div class="cursor-hud" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b><span class="scan"></span><span class="label"></span></div>
     {% set path = request.url.path %}
     <header class="site-header">
         <nav aria-label="Main">
@@ -718,12 +810,48 @@
                 </svg>
                 <span>Daily mail</span>
             </a>
+            <button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode">
+                <svg class="sun" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <svg class="moon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+            </button>
         </nav>
+        <script>
+            // Light/dark toggle; the choice is remembered in this browser.
+            (() => {
+                const root = document.documentElement;
+                const button = document.querySelector("[data-theme-toggle]");
+                const systemDark = matchMedia("(prefers-color-scheme: dark)");
+                const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : systemDark.matches;
+                const show = () => {
+                    const dark = isDark();
+                    button.classList.toggle("is-dark", dark);
+                    const label = dark ? "Switch to light mode" : "Switch to dark mode";
+                    button.setAttribute("aria-label", label);
+                    button.title = label;
+                };
+                button.addEventListener("click", () => {
+                    root.classList.add("theme-switching");
+                    root.dataset.theme = isDark() ? "light" : "dark";
+                    try { localStorage.setItem("gt-theme", root.dataset.theme); } catch {}
+                    show();
+                    setTimeout(() => root.classList.remove("theme-switching"), 400);
+                });
+                systemDark.addEventListener("change", show);
+                show();
+            })();
+        </script>
     </header>
 
     <main class="{% block main_class %}{% endblock %}">
         {% block content %}{% endblock %}
     </main>
+
+    {% include "_chat_widget.html" %}
 
     <footer class="site-footer">
         <span class="jai">Atharv ji ki Jai Ho !!</span>
@@ -791,18 +919,51 @@
             if (!finePointer) return;
 
             const glow = document.querySelector(".cursor-glow");
-            const ring = document.querySelector(".cursor-ring");
-            const dot = document.querySelector(".cursor-dot");
+            const hud = document.querySelector(".cursor-hud");
+            const hudLabel = hud.querySelector(".label");
+            const canvas = document.querySelector(".cursor-trail");
+            const context = canvas.getContext("2d");
             const magnets = document.querySelectorAll("[data-magnetic]");
             const interactive = "a, button, input, select, textarea, summary, label, [role=button]";
             let x = innerWidth / 2, y = innerHeight / 2;
-            let ringX = x, ringY = y, glowX = x, glowY = y;
+            let glowX = x, glowY = y;
+            let target = null;                       // hovered element the HUD locks onto
+            const box = { x: x - 14, y: y - 14, w: 28, h: 28 };
+            const trail = [];                        // recent pointer positions
+            const sparks = [];                       // small particles
+            const waves = [];                        // click shockwaves
+
+            const resize = () => {
+                const ratio = devicePixelRatio || 1;
+                canvas.width = innerWidth * ratio;
+                canvas.height = innerHeight * ratio;
+                context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            };
+            addEventListener("resize", resize);
+            resize();
+
+            const labelFor = (element) => {
+                if (!element) return "";
+                const tag = element.tagName.toLowerCase();
+                if (tag === "input" || tag === "textarea" || tag === "select") return "▸ INPUT";
+                if (tag === "a") return "▸ LINK";
+                return "▸ TARGET LOCKED";
+            };
 
             document.addEventListener("pointermove", (event) => {
                 x = event.clientX;
                 y = event.clientY;
                 document.body.classList.add("cursor-on");
-                document.body.classList.toggle("cursor-hover", !!event.target.closest(interactive));
+                const hovered = event.target.closest(interactive);
+                if (hovered !== target) {
+                    target = hovered;
+                    hudLabel.textContent = labelFor(target);
+                }
+                document.body.classList.toggle("cursor-hover", !!target);
+                trail.push({ x, y, t: performance.now() });
+                if (Math.random() < 0.25) {
+                    sparks.push({ x, y, vx: (Math.random() - 0.5) * 1.4, vy: (Math.random() - 0.5) * 1.4, life: 1 });
+                }
 
                 // Spotlight position inside the hovered card.
                 const card = event.target.closest(".card, form.panel, .stat");
@@ -824,21 +985,97 @@
             }, { passive: true });
 
             document.documentElement.addEventListener("mouseleave", () => document.body.classList.remove("cursor-on"));
-            document.addEventListener("pointerdown", () => document.body.classList.add("cursor-down"));
+            document.addEventListener("pointerdown", (event) => {
+                document.body.classList.add("cursor-down");
+                waves.push({ x: event.clientX, y: event.clientY, r: 4, life: 1 });
+            });
             document.addEventListener("pointerup", () => document.body.classList.remove("cursor-down"));
 
-            // The dot is exact; the ring and glow trail smoothly behind it.
-            const follow = () => {
-                ringX += (x - ringX) * 0.22;
-                ringY += (y - ringY) * 0.22;
+            const hexagon = (cx, cy, r, rotation) => {
+                context.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = rotation + (Math.PI / 3) * i;
+                    const px = cx + r * Math.cos(angle), py = cy + r * Math.sin(angle);
+                    i ? context.lineTo(px, py) : context.moveTo(px, py);
+                }
+                context.closePath();
+            };
+
+            const frame = (now) => {
+                // HUD brackets: small reticle on the pointer, or wrapped
+                // around the hovered element like a target lock.
+                let goal;
+                if (target && target.isConnected) {
+                    const rect = target.getBoundingClientRect();
+                    goal = { x: rect.left - 6, y: rect.top - 6, w: rect.width + 12, h: rect.height + 12 };
+                } else {
+                    goal = { x: x - 14, y: y - 14, w: 28, h: 28 };
+                }
+                const ease = target ? 0.25 : 0.35;
+                box.x += (goal.x - box.x) * ease;
+                box.y += (goal.y - box.y) * ease;
+                box.w += (goal.w - box.w) * ease;
+                box.h += (goal.h - box.h) * ease;
+                hud.style.transform = `translate(${box.x}px, ${box.y}px)`;
+                hud.style.width = `${box.w}px`;
+                hud.style.height = `${box.h}px`;
+
                 glowX += (x - glowX) * 0.08;
                 glowY += (y - glowY) * 0.08;
-                dot.style.transform = `translate(${x}px, ${y}px)`;
-                ring.style.transform = `translate(${ringX}px, ${ringY}px)`;
                 glow.style.transform = `translate(${glowX}px, ${glowY}px)`;
-                requestAnimationFrame(follow);
+
+                context.clearRect(0, 0, innerWidth, innerHeight);
+
+                // Neon light trail: fades over 350 ms, cyan to violet.
+                while (trail.length && now - trail[0].t > 350) trail.shift();
+                for (let i = 1; i < trail.length; i++) {
+                    const a = trail[i - 1], b = trail[i];
+                    const age = 1 - (now - b.t) / 350;
+                    context.strokeStyle = `hsla(${190 + (1 - age) * 90}, 100%, 60%, ${age * 0.9})`;
+                    context.lineWidth = 1 + age * 3.5;
+                    context.lineCap = "round";
+                    context.shadowColor = "#00d5ff";
+                    context.shadowBlur = 12 * age;
+                    context.beginPath();
+                    context.moveTo(a.x, a.y);
+                    context.lineTo(b.x, b.y);
+                    context.stroke();
+                }
+
+                // Sparks drifting off the trail.
+                context.shadowBlur = 8;
+                for (let i = sparks.length - 1; i >= 0; i--) {
+                    const spark = sparks[i];
+                    spark.x += spark.vx;
+                    spark.y += spark.vy;
+                    spark.life -= 0.03;
+                    if (spark.life <= 0) { sparks.splice(i, 1); continue; }
+                    context.fillStyle = `rgba(168, 85, 247, ${spark.life})`;
+                    context.shadowColor = "#a855f7";
+                    context.fillRect(spark.x - 1, spark.y - 1, 2, 2);
+                }
+
+                // Click shockwave: two expanding, rotating hexagons.
+                for (let i = waves.length - 1; i >= 0; i--) {
+                    const wave = waves[i];
+                    wave.r += 2.6;
+                    wave.life -= 0.035;
+                    if (wave.life <= 0) { waves.splice(i, 1); continue; }
+                    context.shadowColor = "#00d5ff";
+                    context.shadowBlur = 14;
+                    context.lineWidth = 2;
+                    context.strokeStyle = `rgba(0, 213, 255, ${wave.life})`;
+                    hexagon(wave.x, wave.y, wave.r, wave.r / 40);
+                    context.stroke();
+                    context.strokeStyle = `rgba(168, 85, 247, ${wave.life * 0.7})`;
+                    hexagon(wave.x, wave.y, wave.r * 0.6, -wave.r / 30);
+                    context.stroke();
+                }
+                context.shadowBlur = 0;
+
+                requestAnimationFrame(frame);
             };
-            requestAnimationFrame(follow);
+            requestAnimationFrame(frame);
         })();
     </script>
 </body>

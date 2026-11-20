@@ -1,5 +1,7 @@
 # Goal Tracker
 
+> New here? Read the **[User Guide](USER_GUIDE.md)**: every feature in simple terms, and where the local AI model helps.
+
 A local Python application for weekly/monthly goals and daily progress
 recording, with a terminal interface and an initial web interface.
 

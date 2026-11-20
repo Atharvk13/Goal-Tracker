@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Jarvis Suggestions | Goal Tracker{% endblock %}
+{% block main_class %}medium{% endblock %}
+
+{% block styles %}
+    <style>
+        .proposal {
+            display: grid;
+            gap: 10px;
+            padding: 16px 0;
+            border-top: 1px solid var(--border-soft);
+        }
+        .proposal:first-of-type { border-top: 0; padding-top: 4px; }
+        .proposal h3 { margin: 0; font-size: 1rem; }
+        .proposal dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+        .proposal dt { margin: 0; font-weight: 600; font-size: 0.88rem; }
+        .proposal dd { margin: 0; font-size: 0.92rem; }
+        .proposal .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+        .proposal form { margin: 0; }
+        .jobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .jobs form { margin: 0; }
+        .jobs button { width: 100%; }
+        .recent li { margin: 6px 0; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <h1>Jarvis suggestions</h1>
+    <p class="intro">
+        Changes Jarvis proposes from your chats, follow-ups on pending work and
+        deadlines, and weekly planning. <strong>Nothing is saved until you confirm.</strong>
+    </p>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% if ran %}
+        <p class="notice">{{ ran }} finished: {{ ran_count }} new suggestion{{ "" if ran_count == 1 else "s" }}.</p>
+    {% endif %}
+
+    {% if pending_count == 0 %}
+        <section class="card">
+            <p class="muted">No suggestions waiting. Ask Jarvis to change something, or run a job below.</p>
+        </section>
+    {% endif %}
+
+    {% for title, proposals in groups %}
+        {% if proposals %}
+            <section class="card" aria-labelledby="group-{{ loop.index }}">
+                <h2 id="group-{{ loop.index }}">{{ title }} <span class="badge badge-pending">{{ proposals | length }}</span></h2>
+                {% for proposal in proposals %}
+                    <article class="proposal">
+                        <h3>{{ proposal["summary"] }}</h3>
+                        {% if proposal["details"] %}
+                            <dl>
+                                {% for label, value in proposal["details"] %}
+                                    <dt>{{ label }}</dt>
+                                    <dd>{% if value.startswith("/") %}<a href="{{ value }}">{{ value }}</a>{% else %}{{ value }}{% endif %}</dd>
+                                {% endfor %}
+                            </dl>
+                        {% endif %}
+                        <div class="actions">
+                            <form action="/agent/proposals/{{ proposal['id'] }}/confirm" method="post">
+                                <button type="submit" class="small" data-busy="Saving…">
+                                    {% if proposal["kind"] == "note" %}Got it{% else %}Confirm{% endif %}
+                                </button>
+                            </form>
+                            {% if proposal["kind"] != "note" %}
+                                <form action="/agent/proposals/{{ proposal['id'] }}/dismiss" method="post">
+                                    <button type="submit" class="secondary small">Dismiss</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        <span class="hint">{{ proposal["created_at"] | when }}</span>
+                    </article>
+                {% endfor %}
+            </section>
+        {% endif %}
+    {% endfor %}
+
+    <section class="card" aria-labelledby="jobs-heading">
+        <h2 id="jobs-heading">Run a Jarvis job now</h2>
+        <p class="metadata">
+            {% if schedule_on %}
+                These also run automatically while the app is open: follow-ups on
+                weekdays from 18:00, the wrap-up on Friday from 17:00 and planning on
+                Monday from 09:00.
+            {% else %}
+                Scheduled runs are turned off (GT_AGENT_SCHEDULE=false).
+            {% endif %}
+            Jobs that use the local model can take a few minutes.
+        </p>
+        <div class="jobs">
+            {% for job in jobs %}
+                <form action="/agent/run" method="post">
+                    <input type="hidden" name="job" value="{{ job.name }}">
+                    <button type="submit" class="secondary" data-busy="Running… (please wait)">{{ job.title }}</button>
+                </form>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% if recent %}
+        <section class="card" aria-labelledby="recent-heading">
+            <h2 id="recent-heading">Recently handled</h2>
+            <ul class="recent">
+                {% for proposal in recent %}
+                    <li>
+                        {% if proposal["status"] == "confirmed" %}<span class="badge badge-completed">Confirmed</span>
+                        {% elif proposal["status"] == "failed" %}<span class="badge badge-overdue">Failed</span>
+                        {% else %}<span class="badge">Dismissed</span>{% endif %}
+                        {{ proposal["summary"] }}
+                        {% if proposal["result"] %}<span class="muted">· {{ proposal["result"] }}</span>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% endif %}
+{% endblock %}

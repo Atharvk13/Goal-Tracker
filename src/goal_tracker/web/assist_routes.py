@@ -21,7 +21,10 @@ from goal_tracker.assist.planning import (
     week_plan_input,
     week_to_plan,
 )
+from goal_tracker.assist.planning import NothingToPlan, make_week_plan
+from goal_tracker.assist.proposals import services_for
 from goal_tracker.assist.store import SuggestionStore
+from goal_tracker.llm.lock import MODEL_LOCK
 from goal_tracker.domain.goal_changes import GoalUpdate
 from goal_tracker.web.dependencies import (
     get_analysis_service,
@@ -207,17 +210,19 @@ def week_plan(request: Request, week: str | None = None):
 @router.post("/week-plan", include_in_schema=False)
 def generate_week_plan(request: Request, week: Annotated[str, Form()] = ""):
     requested = _parse_week(week)
-    current = today(request)
-    monday, days = week_to_plan(current, requested)
-    data = week_plan_input(
-        get_goal_service(request),
-        get_analysis_service(request),
-        get_progress_service(request),
-        monday=monday,
-        today=current,
-    )
+    context = get_context(request)
 
-    if not data["goals"] and not data["pending_work"]:
+    try:
+        with MODEL_LOCK:
+            monday = make_week_plan(
+                services_for(context),
+                get_gateway(request),
+                _store(request),
+                model=context.settings.llm_model,
+                today=today(request),
+                requested=requested,
+            )
+    except NothingToPlan:
         return _week_page(
             request,
             requested,
@@ -227,9 +232,6 @@ def generate_week_plan(request: Request, week: Annotated[str, Form()] = ""):
             ),
             status_code=422,
         )
-
-    try:
-        plan = get_gateway(request).plan_week(data, days)
     except Exception as error:
         return _week_page(
             request,
@@ -237,13 +239,5 @@ def generate_week_plan(request: Request, week: Annotated[str, Form()] = ""):
             error=_unavailable(request, "Week planning", error),
             status_code=503,
         )
-
-    _store(request).save(
-        WEEK_PLAN,
-        monday.isoformat(),
-        evidence_hash=evidence_hash(data),
-        content=plan.model_dump(),
-        model=get_context(request).settings.llm_model,
-    )
 
     return RedirectResponse(url=f"/week-plan?week={monday.isoformat()}", status_code=303)

@@ -27,6 +27,83 @@ def clean_items(values: list[str]) -> list[str]:
     return cleaned
 
 
+class ChatAnswer(BaseModel):
+    """A reply grounded in supplied records."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answered: bool = Field(
+        description="True only when the supplied records contain the answer."
+    )
+    answer: str = Field(
+        max_length=2000,
+        description="The answer, using only the supplied records.",
+    )
+    sources: list[str] = Field(
+        max_length=20,
+        description="IDs of the records the answer uses, such as G1 or A3.",
+    )
+
+
+AGENT_INTENTS = (
+    "question",
+    "update_work_status",
+    "log_work",
+    "complete_milestone",
+    "add_milestone",
+    "move_milestone",
+    "none",
+)
+
+
+class AgentDecision(BaseModel):
+    """One action Jarvis proposes from a chat message (confirmed later)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intent: Literal[
+        "question",
+        "update_work_status",
+        "log_work",
+        "complete_milestone",
+        "add_milestone",
+        "move_milestone",
+        "none",
+    ] = Field(description="What the user asks for.")
+    target: str = Field(
+        max_length=20,
+        description="ID of the record the action is about (G#, M# or P#), or empty.",
+    )
+    state: Literal["completed", "in_progress", "pending", "none"] = Field(
+        description="New work status, or none."
+    )
+    text: str = Field(
+        max_length=300,
+        description="Work description or new milestone text, or empty.",
+    )
+    minutes: int = Field(ge=-1, le=1440, description="Minutes spent, or -1 if not stated.")
+    date: str = Field(
+        max_length=10,
+        description="A date in YYYY-MM-DD format if the user gave one, else empty.",
+    )
+
+
+class WeekRecap(BaseModel):
+    """A short, records-only recap of the working week."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    points: list[str] = Field(
+        max_length=5,
+        description="Up to five short points about the week, from the records only.",
+    )
+
+    @field_validator("points")
+    @classmethod
+    def _clean(cls, values: list[str]) -> list[str]:
+        return clean_items(values)
+
+
 class GoalReview(BaseModel):
     """Suggestions shown beside a saved goal."""
 

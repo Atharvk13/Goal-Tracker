@@ -50,6 +50,9 @@ class FakeGateway:
         self.mail_draft = None
         self.goal_review = None
         self.week_plan = None
+        self.chat_answer = None
+        self.decision = None
+        self.recap = None
         self.error: Exception | None = None
         self.calls: list[str] = []
 
@@ -76,6 +79,18 @@ class FakeGateway:
         self.review_input = goal
         return self._result("review_goal", self.goal_review)
 
+    def answer_from_records(self, question, records, *, today, history=None):
+        self.chat_input = {"question": question, "records": records, "today": today, "history": history}
+        return self._result("answer_from_records", self.chat_answer)
+
+    def decide_action(self, message, records, *, today):
+        self.action_input = {"message": message, "records": records, "today": today}
+        return self._result("decide_action", self.decision)
+
+    def recap_week(self, records, *, week):
+        self.recap_input = {"records": records, "week": week}
+        return self._result("recap_week", self.recap)
+
     def plan_week(self, week, days):
         self.week_input, self.week_days = week, days
         return self._result("plan_week", self.week_plan)
@@ -87,7 +102,7 @@ def web(tmp_path, monkeypatch):
     migrate_database(paths.database, paths.backups)
 
     context = AppContext(
-        settings=Settings(llm_model="test-model", timezone=TIMEZONE),
+        settings=Settings(llm_model="test-model", timezone=TIMEZONE, agent_schedule=False),
         paths=paths,
         logger=Mock(),
     )

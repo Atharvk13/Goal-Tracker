@@ -102,6 +102,18 @@
         </article>
 
         <article class="card">
+            <h2>Jarvis</h2>
+            <p>
+                {% if jarvis_count %}
+                    Jarvis has <strong>{{ jarvis_count }}</strong> suggestion{{ "" if jarvis_count == 1 else "s" }} waiting for you.
+                {% else %}
+                    Follow-ups, weekly wrap-up and planning, ready for your confirmation.
+                {% endif %}
+            </p>
+            <a href="/agent">Open Jarvis suggestions →</a>
+        </article>
+
+        <article class="card">
             <h2>Daily progress</h2>
             <p>Record your work, learnings, challenges, and achievements.</p>
             <a href="/progress/new">Record today's progress →</a>

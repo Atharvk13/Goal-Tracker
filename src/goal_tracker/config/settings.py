@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # "draft" opens the filled message in classic Outlook for you to send.
     mail_send_mode: Literal["open", "send", "draft"] = "open"
 
+    # Jarvis prepares follow-ups (weekdays 18:00), a Friday wrap-up (17:00)
+    # and Monday planning (09:00) while the web app is open. Every change is
+    # a suggestion you confirm.
+    agent_schedule: bool = True
+
 
 def load_settings(env_file: str | None = None) -> Settings:
     """Load settings from an optional .env file and the environment."""

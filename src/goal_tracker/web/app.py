@@ -1,7 +1,9 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 
+from goal_tracker.assist.proposals import ProposalStore
 from goal_tracker.bootstrap import bootstrap
 from goal_tracker.domain.enums import PeriodKind
 from goal_tracker.domain.errors import AppError
@@ -19,6 +21,9 @@ from goal_tracker.web.dependencies import (
     today,
 )
 from goal_tracker.web.assist_routes import router as assist_router
+from goal_tracker.web.agent_routes import router as agent_router
+from goal_tracker.web.chat_routes import router as chat_router
+from goal_tracker.web.scheduler import run_scheduler
 from goal_tracker.web.goal_edit_routes import router as goal_edit_router
 from goal_tracker.web.goal_lifecycle_routes import router as goal_lifecycle_router
 from goal_tracker.web.goal_routes import router as goal_router
@@ -35,7 +40,14 @@ def create_app(env_file: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.context = bootstrap(env_file)
+        task = None
+        if app.state.context.settings.agent_schedule:
+            task = asyncio.create_task(run_scheduler(app.state.context))
         yield
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
     app = FastAPI(
         title="Goal Tracker",
@@ -44,6 +56,8 @@ def create_app(env_file: str | None = None) -> FastAPI:
 
     app.include_router(goal_router)
     app.include_router(assist_router)
+    app.include_router(chat_router)
+    app.include_router(agent_router)
     app.include_router(goal_edit_router)
     app.include_router(goal_lifecycle_router)
     app.include_router(plan_router)
@@ -90,6 +104,7 @@ def create_app(env_file: str | None = None) -> FastAPI:
                 "timezone": context.settings.timezone,
                 "today": current.isoformat(),
                 "overview": overview,
+                "jarvis_count": ProposalStore(context.paths.database).count_pending(),
             },
         )
 

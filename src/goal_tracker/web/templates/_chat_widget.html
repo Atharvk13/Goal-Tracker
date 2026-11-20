@@ -1,0 +1,635 @@
+{# Jarvis: chat assistant that answers only from saved records, using the local model. #}
+{% macro bot_avatar(extra="") %}
+    <svg class="jarvis {{ extra }}" viewBox="0 0 64 64" aria-hidden="true">
+        <line class="bot-wire" x1="32" y1="7" x2="32" y2="15"/>
+        <circle class="bot-antenna" cx="32" cy="6" r="3.6"/>
+        <rect class="bot-ear" x="5" y="28" width="6" height="13" rx="3"/>
+        <rect class="bot-ear" x="53" y="28" width="6" height="13" rx="3"/>
+        <rect class="bot-head" x="10" y="14" width="44" height="40" rx="13"/>
+        <rect class="bot-face" x="16" y="21" width="32" height="24" rx="9"/>
+        <g class="bot-eyes">
+            <ellipse class="bot-eye" cx="25.5" cy="31" rx="3.2" ry="3.8"/>
+            <ellipse class="bot-eye" cx="38.5" cy="31" rx="3.2" ry="3.8"/>
+        </g>
+        <path class="bot-mouth" d="M26.5 38.5 q5.5 4 11 0"/>
+        <circle class="bot-cheek" cx="20.5" cy="38" r="2"/>
+        <circle class="bot-cheek" cx="43.5" cy="38" r="2"/>
+    </svg>
+{% endmacro %}
+<style>
+    /* ---------- Jarvis avatar ---------- */
+    .jarvis { display: block; overflow: visible; }
+    .bot-head { fill: #f2f5ff; stroke: #c9d3f5; stroke-width: 1.5; }
+    .bot-ear { fill: #c9d3f5; }
+    .bot-face { fill: #151b33; }
+    .bot-wire { stroke: #c9d3f5; stroke-width: 2.5; stroke-linecap: round; }
+    .bot-antenna { fill: #ff5ea8; transform-box: fill-box; transform-origin: center; animation: antenna 2.2s ease-in-out infinite; }
+    .bot-eyes { transition: transform 0.15s ease-out; }
+    .bot-eye { fill: #5ee7ff; filter: drop-shadow(0 0 2px #5ee7ff); transform-box: fill-box; transform-origin: center; animation: blink 4.8s infinite; }
+    .bot-mouth { fill: none; stroke: #5ee7ff; stroke-width: 2.2; stroke-linecap: round; transform-box: fill-box; transform-origin: center; }
+    .bot-cheek { fill: #ff5ea8; opacity: 0.35; }
+    .jarvis.floating { animation: bot-float 3.2s ease-in-out infinite; }
+
+    /* Thinking: antenna flashes, eyes scan, mouth "talks" */
+    .jarvis.thinking .bot-antenna { animation: antenna 0.5s ease-in-out infinite; fill: #ffd25e; }
+    .jarvis.thinking .bot-eye { animation: scan 1.2s ease-in-out infinite; }
+    .jarvis.thinking .bot-mouth { animation: talk 0.35s ease-in-out infinite alternate; }
+    /* Answered: happy bounce */
+    .jarvis.happy { animation: bot-happy 0.6s cubic-bezier(.2,1.6,.4,1); }
+    .jarvis.happy .bot-cheek { opacity: 0.8; transition: opacity 0.3s; }
+    /* Said hello when the panel opens */
+    .jarvis.hello { animation: bot-hello 1s ease-in-out; transform-origin: 50% 90%; }
+
+    @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+    @keyframes antenna { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.75); } }
+    @keyframes scan { 0%, 100% { transform: translateX(-2px); } 50% { transform: translateX(2px); } }
+    @keyframes talk { from { transform: scaleY(0.4); } to { transform: scaleY(1.6); } }
+    @keyframes bot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    @keyframes bot-happy { 0% { transform: scale(1); } 40% { transform: scale(1.18) rotate(-6deg); } 100% { transform: scale(1); } }
+    @keyframes bot-hello { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-12deg); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(3deg); } }
+
+    .chat-launcher .jarvis { width: 40px; height: 40px; }
+    .chat-head .avatar {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        flex-shrink: 0;
+    }
+    .chat-head .avatar .jarvis { width: 38px; height: 38px; }
+    .chat-head .status-dot {
+        display: inline-block;
+        width: 8px; height: 8px;
+        margin-right: 5px;
+        border-radius: 50%;
+        background: #4ade80;
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+        animation: online 2s infinite;
+        vertical-align: 1px;
+    }
+    @keyframes online { 70% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); } 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); } }
+
+    .chat-row { display: flex; align-items: flex-end; gap: 8px; max-width: 94%; animation: fade-up 0.3s ease both; }
+    .chat-row .mini {
+        flex-shrink: 0;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2455bd, #7c3aed);
+    }
+    .chat-row .mini .jarvis { width: 24px; height: 24px; }
+    .chat-row .chat-msg { max-width: none; animation: none; }
+    .chat-greeting { display: grid; justify-items: center; gap: 6px; padding: 8px 0 4px; text-align: center; }
+    .chat-greeting .jarvis { width: 84px; height: 84px; }
+    .chat-greeting strong { font-size: 1.05rem; }
+
+    .chat-launcher {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        z-index: 90;
+        display: inline-grid;
+        place-items: center;
+        width: 58px;
+        height: 58px;
+        padding: 0;
+        border-radius: 50%;
+        color: #fff;
+        background: linear-gradient(135deg, #2455bd, #7c3aed);
+        box-shadow: 0 10px 28px rgba(80, 70, 220, 0.45);
+        overflow: visible;
+        animation: pop-in 0.6s 0.4s cubic-bezier(.2,1.4,.4,1) both;
+    }
+    .chat-launcher:hover { background: linear-gradient(135deg, #2455bd, #7c3aed); transform: scale(1.06); }
+    .chat-launcher > svg { grid-area: 1 / 1; transition: transform 0.3s ease, opacity 0.2s ease; }
+    .chat-launcher .close-icon { opacity: 0; transform: rotate(-90deg); }
+    .chat-open .chat-launcher .chat-icon { opacity: 0; transform: rotate(90deg); }
+    .chat-open .chat-launcher .close-icon { opacity: 1; transform: none; }
+    .chat-launcher::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid #7c3aed;
+        opacity: 0;
+        animation: pulse 2.6s 1.2s ease-out 3;
+    }
+
+    .chat-panel {
+        position: fixed;
+        right: 24px;
+        bottom: 96px;
+        z-index: 90;
+        display: flex;
+        flex-direction: column;
+        width: min(400px, calc(100vw - 32px));
+        height: min(580px, calc(100vh - 140px));
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(15, 20, 32, 0.28);
+        overflow: hidden;
+        opacity: 0;
+        transform: translateY(16px) scale(0.97);
+        transform-origin: bottom right;
+        pointer-events: none;
+        transition: opacity 0.25s ease, transform 0.3s cubic-bezier(.2,.8,.2,1);
+    }
+    .chat-open .chat-panel { opacity: 1; transform: none; pointer-events: auto; }
+
+    .chat-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        color: #fff;
+        background: linear-gradient(135deg, #2455bd, #7c3aed);
+    }
+    .chat-head .titles { flex: 1; min-width: 0; }
+    .chat-head strong { display: block; font-size: 1rem; }
+    .chat-head span { display: block; font-size: 0.78rem; opacity: 0.85; }
+    .chat-head button {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.16);
+    }
+    .chat-head button:hover { background: rgba(255, 255, 255, 0.28); color: #fff; }
+    .chat-head button:not(:disabled):hover { box-shadow: none; }
+
+    .chat-log {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: var(--bg);
+        scroll-behavior: smooth;
+    }
+    .chat-msg {
+        max-width: 88%;
+        padding: 10px 13px;
+        border-radius: 14px;
+        line-height: 1.45;
+        font-size: 0.93rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        animation: fade-up 0.3s ease both;
+    }
+    .chat-msg.user {
+        align-self: flex-end;
+        color: #fff;
+        background: linear-gradient(135deg, #2455bd, #5b46e0);
+        border-bottom-right-radius: 4px;
+    }
+    .chat-msg.bot {
+        align-self: flex-start;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+    }
+    .chat-msg.bot.none { color: var(--muted); font-style: italic; }
+    .chat-msg.bot.error { color: var(--err-fg); background: var(--err-bg); border-color: var(--err-border); }
+    .chat-msg details { margin-top: 8px; font-size: 0.8rem; color: var(--muted); white-space: normal; font-style: normal; }
+    .chat-msg summary { cursor: pointer; }
+    .chat-msg details li { margin: 4px 0; }
+    .chat-msg code { font-weight: 700; color: var(--accent); }
+
+    .chat-typing { display: inline-flex; gap: 4px; padding: 14px 16px; }
+    .chat-typing i {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+        animation: bounce 1.2s infinite ease-in-out;
+    }
+    .chat-typing i:nth-child(2) { animation-delay: 0.15s; }
+    .chat-typing i:nth-child(3) { animation-delay: 0.3s; }
+
+    .chat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chat-chips button {
+        padding: 6px 11px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 999px;
+        color: var(--accent);
+        background: var(--accent-soft);
+    }
+    .chat-chips button:hover { color: var(--accent); background: var(--accent-soft); }
+
+    .chat-form {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+    .chat-form textarea {
+        flex: 1;
+        min-height: 42px;
+        max-height: 120px;
+        margin: 0;
+        padding: 10px 12px;
+        resize: none;
+        font: inherit;
+        font-size: 0.93rem;
+        border-radius: 12px;
+    }
+    .chat-form button { padding: 0 16px; border-radius: 12px; }
+
+    .chat-proposal {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--accent);
+        background: var(--accent-soft);
+        white-space: normal;
+        font-style: normal;
+    }
+    .chat-proposal strong { display: block; margin-bottom: 6px; color: var(--text); }
+    .chat-proposal dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0 0 8px; font-size: 0.82rem; }
+    .chat-proposal dt { margin: 0; font-weight: 600; color: var(--muted); }
+    .chat-proposal dd { margin: 0; }
+    .chat-proposal .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .chat-proposal button { padding: 6px 12px; font-size: 0.82rem; }
+    .chat-proposal .state { font-size: 0.82rem; font-weight: 600; }
+    .chat-proposal .state.ok { color: var(--ok-fg); }
+    .chat-proposal .state.bad { color: var(--err-fg); }
+    .chat-head a.suggestions {
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #fff;
+        text-decoration: none;
+        background: rgba(255, 255, 255, 0.16);
+    }
+    .chat-head a.suggestions:hover { background: rgba(255, 255, 255, 0.28); color: #fff; }
+    .chat-badge {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 5px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 20px;
+        color: #fff;
+        background: #ff3d7f;
+        box-shadow: 0 0 0 2px var(--surface);
+        animation: pop-in 0.4s cubic-bezier(.2,1.4,.4,1) both;
+    }
+    .chat-badge[hidden] { display: none; }
+
+    @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-5px); opacity: 1; } }
+    @keyframes pulse { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+
+    @media (max-width: 560px) {
+        .chat-launcher { right: 16px; bottom: 16px; }
+        .chat-panel { right: 16px; bottom: 86px; }
+    }
+</style>
+
+<div class="chat" data-chat>
+    <section class="chat-panel" id="chat-panel" role="dialog" aria-label="Jarvis, your records assistant" aria-hidden="true">
+        <header class="chat-head">
+            <span class="avatar" data-head-avatar>{{ bot_avatar("floating") }}</span>
+            <div class="titles">
+                <strong>Jarvis</strong>
+                <span data-chat-status><i class="status-dot"></i>Online · answers only from your saved records</span>
+            </div>
+            <a class="suggestions" href="/agent" title="Jarvis suggestions">Suggestions</a>
+            <button type="button" data-chat-clear title="Start a new conversation">Clear</button>
+        </header>
+
+        <div class="chat-log" data-chat-log aria-live="polite"></div>
+
+        <form class="chat-form" data-chat-form>
+            <label class="visually-hidden" for="chat-input" style="position:absolute;left:-9999px">Your question</label>
+            <textarea id="chat-input" rows="1" maxlength="1000" placeholder="Ask Jarvis about your goals or progress…" required></textarea>
+            <button type="submit" aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 12l16-8-6 16-2.5-6.5L4 12z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        </form>
+    </section>
+
+    <template data-mini-avatar><span class="mini">{{ bot_avatar() }}</span></template>
+    <template data-big-avatar>{{ bot_avatar("floating") }}</template>
+
+    <button type="button" class="chat-launcher" data-chat-toggle aria-controls="chat-panel" aria-expanded="false" aria-label="Open Jarvis" title="Ask Jarvis">
+        <span class="chat-icon" style="grid-area: 1 / 1; display: grid; transition: transform 0.3s ease, opacity 0.2s ease;">{{ bot_avatar("floating") }}</span>
+        <span class="chat-badge" data-chat-badge hidden title="Suggestions waiting"></span>
+        <svg class="close-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+    </button>
+</div>
+
+<script>
+    (() => {
+        const root = document.querySelector("[data-chat]");
+        const panel = root.querySelector(".chat-panel");
+        const log = root.querySelector("[data-chat-log]");
+        const form = root.querySelector("[data-chat-form]");
+        const input = form.querySelector("textarea");
+        const send = form.querySelector("button");
+        const toggle = root.querySelector("[data-chat-toggle]");
+        const KEY = "gt-chat";
+        const SUGGESTIONS = [
+            "What are my goals this week?",
+            "What is still pending?",
+            "What did I learn this week?",
+            "Log 30 minutes of code review today",
+        ];
+
+        // Conversation kept for this browser tab only.
+        let turns = [];
+        try { turns = JSON.parse(sessionStorage.getItem(KEY) || "[]"); } catch { turns = []; }
+        const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(turns.slice(-30))); } catch {} };
+
+        const scroll = () => { log.scrollTop = log.scrollHeight; };
+
+        const bubble = (role, text, options = {}) => {
+            const message = document.createElement("div");
+            message.className = `chat-msg ${role}${options.kind ? " " + options.kind : ""}`;
+            message.textContent = text;
+            if (options.sources && options.sources.length) {
+                const details = document.createElement("details");
+                const summary = document.createElement("summary");
+                summary.textContent = `Based on ${options.sources.length} saved record${options.sources.length > 1 ? "s" : ""}`;
+                const list = document.createElement("ul");
+                options.sources.forEach((source) => {
+                    const item = document.createElement("li");
+                    const id = document.createElement("code");
+                    id.textContent = source.id;
+                    item.append(id, " ", source.text);
+                    list.appendChild(item);
+                });
+                details.append(summary, list);
+                message.appendChild(details);
+            }
+            if (options.proposal) message.appendChild(proposalCard(options.proposal));
+            log.appendChild(role === "bot" ? withAvatar(message) : message);
+            scroll();
+            return message;
+        };
+
+        // Suggestions waiting for confirmation (badge on the launcher).
+        const badge = root.querySelector("[data-chat-badge]");
+        const refreshBadge = async () => {
+            try {
+                const data = await (await fetch("/agent/count")).json();
+                badge.textContent = data.pending > 9 ? "9+" : String(data.pending);
+                badge.hidden = !data.pending;
+            } catch {}
+        };
+
+        const STATUS_TEXT = {
+            confirmed: "✓ Saved",
+            dismissed: "Dismissed",
+            failed: "Couldn't save",
+        };
+
+        // A proposed change with Confirm / Dismiss; nothing is saved before Confirm.
+        const proposalCard = (proposal) => {
+            const card = document.createElement("div");
+            card.className = "chat-proposal";
+            const title = document.createElement("strong");
+            title.textContent = proposal.summary;
+            card.appendChild(title);
+
+            if (proposal.details && proposal.details.length) {
+                const list = document.createElement("dl");
+                proposal.details.forEach(([label, value]) => {
+                    const term = document.createElement("dt");
+                    term.textContent = label;
+                    const text = document.createElement("dd");
+                    text.textContent = value;
+                    list.append(term, text);
+                });
+                card.appendChild(list);
+            }
+
+            const row = document.createElement("div");
+            row.className = "row";
+            const state = document.createElement("span");
+            state.className = "state";
+
+            const show = (status, result) => {
+                row.replaceChildren(state);
+                state.textContent = STATUS_TEXT[status] + (result && status !== "dismissed" ? ` — ${result}` : "");
+                state.classList.toggle("ok", status === "confirmed");
+                state.classList.toggle("bad", status === "failed");
+                const turn = turns.find((item) => item.proposal && item.proposal.id === proposal.id);
+                if (turn) { turn.proposal.status = status; turn.proposal.result = result; save(); }
+            };
+
+            const act = async (action, button) => {
+                button.disabled = true;
+                button.textContent = action === "confirm" ? "Saving…" : "…";
+                try {
+                    const response = await fetch(`/agent/proposals/${proposal.id}/${action}`, {
+                        method: "POST",
+                        headers: { Accept: "application/json" },
+                    });
+                    const data = await response.json();
+                    show(data.status, data.result);
+                    if (data.status === "confirmed") mood("happy");
+                } catch {
+                    button.disabled = false;
+                    button.textContent = "Try again";
+                }
+                refreshBadge();
+            };
+
+            if (proposal.status && proposal.status !== "pending") {
+                show(proposal.status, proposal.result);
+            } else {
+                const yes = document.createElement("button");
+                yes.type = "button";
+                yes.textContent = "Confirm";
+                yes.addEventListener("click", () => act("confirm", yes));
+                const no = document.createElement("button");
+                no.type = "button";
+                no.className = "secondary";
+                no.textContent = "Dismiss";
+                no.addEventListener("click", () => act("dismiss", no));
+                row.append(yes, no);
+            }
+            card.appendChild(row);
+            return card;
+        };
+
+        // Jarvis's face beside each reply.
+        const miniTemplate = root.querySelector("[data-mini-avatar]");
+        const withAvatar = (message, state = "") => {
+            const row = document.createElement("div");
+            row.className = "chat-row";
+            const face = miniTemplate.content.firstElementChild.cloneNode(true);
+            if (state) face.querySelector(".jarvis").classList.add(state);
+            row.append(face, message);
+            return row;
+        };
+
+        const headBot = root.querySelector("[data-head-avatar] .jarvis");
+        const status = root.querySelector("[data-chat-status]");
+        const STATUS = status.innerHTML;
+        const mood = (name) => {
+            headBot.classList.remove("thinking", "happy", "hello");
+            if (!name) return;
+            void headBot.getBoundingClientRect(); // restart the animation
+            headBot.classList.add(name);
+            if (name !== "thinking") setTimeout(() => headBot.classList.remove(name), 1000);
+        };
+
+        const welcome = () => {
+            const greeting = document.createElement("div");
+            greeting.className = "chat-greeting";
+            greeting.appendChild(root.querySelector("[data-big-avatar]").content.firstElementChild.cloneNode(true));
+            const name = document.createElement("strong");
+            name.textContent = "Hi, I'm Jarvis";
+            const note = document.createElement("span");
+            note.className = "hint";
+            note.textContent = "Your personal records assistant, running on your local model.";
+            greeting.append(name, note);
+            log.appendChild(greeting);
+            bubble("bot", "Ask me anything about your saved goals, progress and pending work. I only answer from your records — if something isn't saved, I'll tell you.");
+            const chips = document.createElement("div");
+            chips.className = "chat-chips";
+            SUGGESTIONS.forEach((text) => {
+                const chip = document.createElement("button");
+                chip.type = "button";
+                chip.textContent = text;
+                chip.addEventListener("click", () => ask(text));
+                chips.appendChild(chip);
+            });
+            log.appendChild(chips);
+        };
+
+        const render = () => {
+            log.replaceChildren();
+            welcome();
+            turns.forEach((turn) => {
+                bubble("user", turn.question);
+                bubble("bot", turn.answer, { kind: turn.answered ? "" : "none", sources: turn.sources, proposal: turn.proposal });
+            });
+        };
+
+        const typing = () => {
+            const dots = document.createElement("div");
+            dots.className = "chat-msg bot chat-typing";
+            dots.setAttribute("aria-label", "Jarvis is thinking");
+            dots.innerHTML = "<i></i><i></i><i></i>";
+            const row = withAvatar(dots, "thinking");
+            log.appendChild(row);
+            mood("thinking");
+            status.textContent = "Jarvis is thinking…";
+            scroll();
+            return row;
+        };
+
+        let busy = false;
+        const ask = async (question) => {
+            question = question.trim();
+            if (!question || busy) return;
+            busy = true;
+            send.disabled = true;
+            input.value = "";
+            bubble("user", question);
+            const dots = typing();
+            const history = turns.slice(-6).map(({ question, answer }) => ({ question, answer }));
+
+            try {
+                const response = await fetch("/chat/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question, history }),
+                });
+                const data = await response.json();
+                dots.remove();
+                if (!response.ok && response.status !== 200 && !data.answer) throw new Error();
+                if (response.status >= 500) {
+                    bubble("bot", data.answer, { kind: "error" });
+                } else {
+                    turns.push({ question, answer: data.answer, answered: data.answered, sources: data.sources, proposal: data.proposal });
+                    save();
+                    bubble("bot", data.answer, { kind: data.answered ? "" : "none", sources: data.sources, proposal: data.proposal });
+                    if (data.proposal) refreshBadge();
+                }
+            } catch {
+                dots.remove();
+                bubble("bot", "Something went wrong. Please try again.", { kind: "error" });
+            } finally {
+                status.innerHTML = STATUS;
+                mood("happy");
+                busy = false;
+                send.disabled = false;
+                input.focus();
+            }
+        };
+
+        const setOpen = (open) => {
+            document.body.classList.toggle("chat-open", open);
+            toggle.setAttribute("aria-expanded", String(open));
+            toggle.setAttribute("aria-label", open ? "Close Jarvis" : "Open Jarvis");
+            panel.setAttribute("aria-hidden", String(!open));
+            try { sessionStorage.setItem(KEY + "-open", open ? "1" : ""); } catch {}
+            if (open) { scroll(); mood("hello"); setTimeout(() => input.focus(), 200); }
+        };
+
+        // Every Jarvis face looks toward the cursor.
+        if (matchMedia("(hover: hover) and (pointer: fine)").matches &&
+            !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            let frame = 0;
+            document.addEventListener("pointermove", (event) => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => {
+                    frame = 0;
+                    document.querySelectorAll("svg.jarvis").forEach((bot) => {
+                        const box = bot.getBoundingClientRect();
+                        if (!box.width) return;
+                        const dx = event.clientX - (box.left + box.width / 2);
+                        const dy = event.clientY - (box.top + box.height / 2);
+                        const distance = Math.hypot(dx, dy) || 1;
+                        const reach = Math.min(1, distance / 160) * 3;
+                        bot.querySelector(".bot-eyes").style.transform =
+                            `translate(${(dx / distance) * reach}px, ${(dy / distance) * reach * 0.7}px)`;
+                    });
+                });
+            }, { passive: true });
+        }
+
+        toggle.addEventListener("click", () => setOpen(!document.body.classList.contains("chat-open")));
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && document.body.classList.contains("chat-open")) setOpen(false);
+        });
+        form.addEventListener("submit", (event) => { event.preventDefault(); ask(input.value); });
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); ask(input.value); }
+        });
+        input.addEventListener("input", () => {
+            input.style.height = "auto";
+            input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+        });
+        root.querySelector("[data-chat-clear]").addEventListener("click", () => {
+            turns = [];
+            save();
+            render();
+            input.focus();
+        });
+
+        render();
+        refreshBadge();
+        let reopen = false;
+        try { reopen = sessionStorage.getItem(KEY + "-open") === "1"; } catch {}
+        if (reopen) setOpen(true);
+    })();
+</script>

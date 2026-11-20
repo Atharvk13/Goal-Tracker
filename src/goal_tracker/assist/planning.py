@@ -18,6 +18,37 @@ GOAL_REVIEW = "goal_review"
 WEEK_PLAN = "week_plan"
 
 
+class NothingToPlan(Exception):
+    """No open milestones and no pending work for the week."""
+
+
+def make_week_plan(services, gateway, suggestion_store, *, model: str, today: date, requested: date | None = None) -> date:
+    """Ask the model for the Mon-Fri plan and store it; returns the Monday.
+
+    Shared by the Week plan page and the scheduled Monday planning.
+    """
+    monday, days = week_to_plan(today, requested)
+    data = week_plan_input(
+        services.goals,
+        services.analysis,
+        services.progress,
+        monday=monday,
+        today=today,
+    )
+    if not data["goals"] and not data["pending_work"]:
+        raise NothingToPlan()
+
+    plan = gateway.plan_week(data, days)
+    suggestion_store.save(
+        WEEK_PLAN,
+        monday.isoformat(),
+        evidence_hash=evidence_hash(data),
+        content=plan.model_dump(),
+        model=model,
+    )
+    return monday
+
+
 def evidence_hash(data: dict) -> str:
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -74,7 +105,7 @@ def _overlaps_week(goal: dict, monday: date) -> bool:
     )
 
 
-def _completed_milestones(analysis, goals: list[dict], today: date) -> set[str]:
+def completed_milestones(analysis, goals: list[dict], today: date) -> set[str]:
     """IDs of milestones already marked done, from each goal's period."""
     completed: set[str] = set()
     periods = {
@@ -116,7 +147,7 @@ def week_plan_input(
         and goal["lifecycle_status"] == "active"
         and _overlaps_week(goal, monday)
     ]
-    done = _completed_milestones(analysis_service, goals, today)
+    done = completed_milestones(analysis_service, goals, today)
 
     planned_goals = []
     for goal in sorted(goals, key=lambda item: (item["target_date"] or item["period"]["end_date"], item["title"])):
