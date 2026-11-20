@@ -25,6 +25,8 @@ def test_expected_bundled_skills_are_available():
         "weekly-report-generation",
         "monthly-report-generation",
         "daily-mail-writing",
+        "goal-review",
+        "week-planning",
     }
     assert all(item["description"].strip() for item in catalog)
 

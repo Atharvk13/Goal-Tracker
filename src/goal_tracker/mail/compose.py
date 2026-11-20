@@ -11,6 +11,9 @@ from dataclasses import dataclass
 
 from goal_tracker.mail.daily import NONE_TEXT
 
+# End of a sentence followed by a new capitalised sentence.
+_SENTENCE_BREAK = re.compile(r"(?<=[a-z0-9)][.!?])\s+(?=[A-Z])")
+
 
 @dataclass(frozen=True)
 class MailSection:
@@ -89,10 +92,14 @@ def merge_written_sections(
             result[section.field] = []
             continue
 
+        # The small model sometimes packs several sentences into one bullet;
+        # give each sentence its own bullet.
         model = [
-            line.strip()
+            sentence.strip()
             for line in (written or {}).get(section.field, [])
-            if line and line.strip()
+            if line
+            for sentence in _SENTENCE_BREAK.split(line)
+            if sentence.strip()
         ]
         result[section.field] = model or own
 

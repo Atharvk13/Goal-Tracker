@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Week Plan | Goal Tracker{% endblock %}
+{% block main_class %}wide{% endblock %}
+
+{% block styles %}
+    <style>
+        .week {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+            margin: 16px 0;
+        }
+
+        .day {
+            border: 1px solid var(--border-soft);
+            border-radius: 10px;
+            padding: 14px;
+            background: var(--surface, transparent);
+        }
+
+        .day.today {
+            border-color: var(--accent, #2455bd);
+            box-shadow: 0 0 0 1px var(--accent, #2455bd);
+        }
+
+        .day h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .day .date {
+            font-size: 0.85rem;
+        }
+
+        .day .focus {
+            font-weight: 600;
+            margin: 8px 0;
+        }
+
+        .day ul {
+            padding-left: 18px;
+            margin: 0;
+        }
+
+        .day li {
+            margin: 4px 0;
+        }
+
+        .inputs ul {
+            margin-top: 4px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <h1>Week plan</h1>
+    <p class="intro">
+        Your local model spreads this week's open milestones and pending work
+        across <strong>Monday to Friday</strong>. It is a suggestion only:
+        nothing is saved as progress.
+    </p>
+
+    <p class="period-line">
+        Week of {{ monday }} to {{ friday }}
+        {% if is_current_week %}
+            · <a href="/week-plan?week={{ next_monday }}">Plan next week →</a>
+        {% else %}
+            · <a href="/week-plan">← This week</a>
+        {% endif %}
+    </p>
+
+    {% if error %}
+        <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    {% if stored %}
+        <section class="card" aria-labelledby="plan-heading">
+            <div class="card-header">
+                <h2 id="plan-heading">Your plan</h2>
+                <span class="hint">{{ stored["model"] }} · {{ stored["created_at"] | when }}</span>
+            </div>
+
+            {% if stale %}
+                <p class="warning">
+                    Your goals or pending work changed after this plan was made.
+                    Regenerate to include the changes.
+                </p>
+            {% endif %}
+
+            <div class="week">
+                {% for entry in stored["content"]["days"] %}
+                    <article class="day {% if is_current_week and entry['day'] == today_name %}today{% endif %}">
+                        <h3>{{ entry["day"] }}{% if is_current_week and entry['day'] == today_name %} · Today{% endif %}</h3>
+                        <div class="date muted">{{ dates[entry["day"]] }}</div>
+                        {% if entry["focus"] %}<p class="focus">{{ entry["focus"] }}</p>{% endif %}
+                        {% if entry["tasks"] %}
+                            <ul>{% for task in entry["tasks"] %}<li>{{ task }}</li>{% endfor %}</ul>
+                        {% else %}
+                            <p class="muted">Nothing planned.</p>
+                        {% endif %}
+                    </article>
+                {% endfor %}
+            </div>
+
+            {% if stored["content"]["notes"] %}
+                <h3>Notes</h3>
+                <ul>{% for note in stored["content"]["notes"] %}<li>{{ note }}</li>{% endfor %}</ul>
+            {% endif %}
+        </section>
+    {% endif %}
+
+    <section class="card inputs" aria-labelledby="inputs-heading">
+        <h2 id="inputs-heading">What the plan uses</h2>
+        <p class="metadata">
+            Days to plan: {{ days | join(", ") }}.
+        </p>
+
+        {% if data["goals"] %}
+            {% for goal in data["goals"] %}
+                <p>
+                    <strong>{{ goal["goal"] }}</strong>
+                    <span class="muted">({{ goal["period"] }}, deadline {{ goal["deadline"] }})</span>
+                </p>
+                <ul>
+                    {% for milestone in goal["open_milestones"] %}
+                        <li>{{ milestone["milestone"] }} <span class="muted">· due {{ milestone["due"] }}</span></li>
+                    {% endfor %}
+                </ul>
+            {% endfor %}
+        {% else %}
+            <p class="muted">No active goal has open milestones in this week. <a href="/goals/new">Add a goal →</a></p>
+        {% endif %}
+
+        {% if data["pending_work"] %}
+            <p><strong>Pending work</strong></p>
+            <ul>
+                {% for item in data["pending_work"] %}
+                    <li>{{ item["task"] }} <span class="muted">· {{ item["status"] | label }}</span></li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <form action="/week-plan" method="post" class="actions">
+            <input type="hidden" name="week" value="{{ monday }}">
+            <button type="submit" data-busy="Planning your week… (up to a minute)" {% if not data["goals"] and not data["pending_work"] %}disabled{% endif %}>
+                {% if stored %}Regenerate plan{% else %}Plan my week{% endif %}
+            </button>
+        </form>
+    </section>
+{% endblock %}

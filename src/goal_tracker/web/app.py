@@ -18,6 +18,7 @@ from goal_tracker.web.dependencies import (
     templates,
     today,
 )
+from goal_tracker.web.assist_routes import router as assist_router
 from goal_tracker.web.goal_edit_routes import router as goal_edit_router
 from goal_tracker.web.goal_lifecycle_routes import router as goal_lifecycle_router
 from goal_tracker.web.goal_routes import router as goal_router
@@ -42,6 +43,7 @@ def create_app(env_file: str | None = None) -> FastAPI:
     )
 
     app.include_router(goal_router)
+    app.include_router(assist_router)
     app.include_router(goal_edit_router)
     app.include_router(goal_lifecycle_router)
     app.include_router(plan_router)

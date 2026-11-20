@@ -60,6 +60,23 @@ def test_model_output_used_only_for_answered_sections():
     }
 
 
+def test_model_bullets_with_several_sentences_are_split():
+    written = {
+        "meetings_activities": [
+            "Attended standup with Arpan. Participated in sprint planning.",
+            "Reviewed v2.0 of the API docs.",
+        ]
+    }
+
+    result = merge_written_sections({"meetings_activities": "standup"}, written)
+
+    assert result["meetings_activities"] == [
+        "Attended standup with Arpan.",
+        "Participated in sprint planning.",
+        "Reviewed v2.0 of the API docs.",
+    ]
+
+
 def test_without_model_the_users_words_are_used():
     merged = merge_written_sections(ANSWERS, None)
 
@@ -123,7 +140,7 @@ def test_model_writes_mail_in_template_format(web):
     assert "5. Blockers / Support Required\n- None\n" in body
     assert body.rstrip().endswith("Regards,\nAtharv")
     assert "Daily Update – " in page.text
-    assert "Written by the local model" in page.text
+    assert "rephrased by the local model" in page.text
 
     # Offer to save the same answers as progress through the AI review flow.
     assert input_values(page.text, "method") == ["ai"]

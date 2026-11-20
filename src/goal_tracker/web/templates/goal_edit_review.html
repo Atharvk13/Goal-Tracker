@@ -24,6 +24,11 @@
                 <dd>{% if field == "target_date" and value is none %}Use the period end{% elif value == "" %}Clear this field{% else %}{{ value }}{% endif %}</dd>
             {% endfor %}
 
+            {% for milestone in draft.add_milestones %}
+                <dt>New milestone</dt>
+                <dd>{{ milestone.description }}</dd>
+            {% endfor %}
+
             <dt>Reason</dt>
             <dd>{{ draft.reason }}</dd>
 

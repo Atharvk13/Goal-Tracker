@@ -22,6 +22,30 @@
         .milestones .description {
             margin: 0 0 8px;
         }
+
+        .ai-card h3 {
+            margin: 18px 0 6px;
+            font-size: 1rem;
+        }
+
+        .ai-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .ai-list li {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .ai-list form {
+            margin: 0;
+            flex-shrink: 0;
+        }
     </style>
 {% endblock %}
 
@@ -130,4 +154,40 @@
             {% endfor %}
         </ol>
     </section>
+
+    {% if ai and ai.available %}
+        {% include "_goal_suggestions.html" %}
+        <script>
+            // Refresh the AI section in place; without JavaScript the form
+            // posts normally and the page reloads.
+            (() => {
+                const run = async (form) => {
+                    const button = form.querySelector("button");
+                    button.disabled = true;
+                    button.textContent = button.dataset.busy;
+                    const placeholder = document.querySelector("[data-ai-placeholder]");
+                    if (placeholder) placeholder.textContent = "Your local model is reviewing this goal…";
+                    try {
+                        const response = await fetch(form.action, { method: "POST", headers: { "X-Fragment": "1" } });
+                        document.getElementById("ai-suggestions").outerHTML = await response.text();
+                    } catch {
+                        button.disabled = false;
+                        button.textContent = "Try again";
+                    }
+                };
+                document.addEventListener("submit", (event) => {
+                    const form = event.target.closest("[data-ai-form]");
+                    if (!form) return;
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    run(form);
+                }, true);
+                {% if auto_suggest and not ai.stored %}
+                    // Just saved: ask for suggestions once, in the background.
+                    history.replaceState(null, "", location.pathname);
+                    run(document.querySelector("[data-ai-form]"));
+                {% endif %}
+            })();
+        </script>
+    {% endif %}
 {% endblock %}

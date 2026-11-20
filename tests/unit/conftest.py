@@ -48,6 +48,8 @@ class FakeGateway:
         self.proposal = None
         self.recommendations = None
         self.mail_draft = None
+        self.goal_review = None
+        self.week_plan = None
         self.error: Exception | None = None
         self.calls: list[str] = []
 
@@ -69,6 +71,14 @@ class FakeGateway:
     def write_daily_mail(self, answers):
         self.mail_answers = answers
         return self._result("write_daily_mail", self.mail_draft)
+
+    def review_goal(self, goal):
+        self.review_input = goal
+        return self._result("review_goal", self.goal_review)
+
+    def plan_week(self, week, days):
+        self.week_input, self.week_days = week, days
+        return self._result("plan_week", self.week_plan)
 
 
 @pytest.fixture

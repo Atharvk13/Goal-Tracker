@@ -1,0 +1,67 @@
+{# "AI suggestions" section of the goal page; also returned on its own when
+   the page refreshes it in place. #}
+<section class="card ai-card" id="ai-suggestions" aria-labelledby="ai-heading">
+    <div class="card-header">
+        <h2 id="ai-heading">AI suggestions</h2>
+        {% if ai.stored %}
+            <span class="hint">
+                {{ ai.stored["model"] }} · {{ ai.stored["created_at"] | when }}
+            </span>
+        {% endif %}
+    </div>
+    <p class="metadata">
+        Ideas from your local model. Nothing changes unless you add a
+        milestone, which you review first.
+    </p>
+
+    {% if ai.error %}
+        <p class="error" role="alert">{{ ai.error }}</p>
+    {% endif %}
+
+    {% if ai.stale %}
+        <p class="warning">The goal changed after these suggestions were made. Regenerate to update them.</p>
+    {% endif %}
+
+    {% if ai.stored %}
+        {% set content = ai.stored["content"] %}
+
+        <h3>Milestones to consider</h3>
+        {% if content["milestone_ideas"] %}
+            <ul class="ai-list">
+                {% for idea in content["milestone_ideas"] %}
+                    <li>
+                        <span>{{ idea }}</span>
+                        <form action="/goals/{{ goal['id'] }}/suggestions/milestone" method="post">
+                            <input type="hidden" name="description" value="{{ idea }}">
+                            <button type="submit" class="secondary small">Add this milestone</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="muted">No missing milestones found.</p>
+        {% endif %}
+
+        <h3>Tips</h3>
+        {% if content["tips"] %}
+            <ul>{% for tip in content["tips"] %}<li>{{ tip }}</li>{% endfor %}</ul>
+        {% else %}
+            <p class="muted">No tips.</p>
+        {% endif %}
+
+        <h3>Risks to watch</h3>
+        {% if content["risks"] %}
+            <ul>{% for risk in content["risks"] %}<li>{{ risk }}</li>{% endfor %}</ul>
+        {% else %}
+            <p class="muted">No risks noted.</p>
+        {% endif %}
+    {% elif not ai.error %}
+        <p class="muted" data-ai-placeholder>No suggestions yet.</p>
+    {% endif %}
+
+    <form action="/goals/{{ goal['id'] }}/suggestions" method="post" data-ai-form class="actions">
+        <button type="submit" class="{% if ai.stored %}secondary{% endif %}" data-busy="Thinking… (up to a minute)">
+            {% if ai.stored %}Regenerate suggestions{% else %}Get AI suggestions{% endif %}
+        </button>
+    </form>
+</section>

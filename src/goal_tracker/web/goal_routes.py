@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from goal_tracker.domain.errors import AppError
 from goal_tracker.domain.models import GoalCreate, PeriodSpec
+from goal_tracker.web.assist_routes import goal_suggestions
 from goal_tracker.web.dependencies import (
     get_context,
     get_gateway,
@@ -255,7 +256,7 @@ def save_goal(
         )
 
     try:
-        get_goal_service(request).create_goal(draft)
+        created = get_goal_service(request).create_goal(draft)
     except AppError as error:
         return _review_response(
             request,
@@ -264,7 +265,11 @@ def save_goal(
             status_code=400,
         )
 
-    return RedirectResponse(url="/goals", status_code=303)
+    # Open the new goal; its page asks the model for suggestions.
+    return RedirectResponse(
+        url=f"/goals/{created['goal']['id']}?suggest=1",
+        status_code=303,
+    )
 
 
 @router.get("/goals/{goal_id}", include_in_schema=False)
@@ -274,5 +279,9 @@ def goal_details(request: Request, goal_id: UUID):
     return templates.TemplateResponse(
         request=request,
         name="goal_details.html",
-        context={"goal": goal},
+        context={
+            "goal": goal,
+            "ai": goal_suggestions(request, goal),
+            "auto_suggest": request.query_params.get("suggest") == "1",
+        },
     )

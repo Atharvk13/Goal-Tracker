@@ -146,9 +146,10 @@ def test_confirmation_saves_once_on_repeated_submission(
         )
 
         assert response.status_code == 303
-        assert response.headers["location"] == "/goals"
 
     goals = service.list_goals()
+    # Saving opens the new goal, which then asks for AI suggestions.
+    assert response.headers["location"] == f"/goals/{goals[0]['id']}?suggest=1"
 
     assert len(goals) == 1
     assert goals[0]["title"] == goal_form["title"]
